@@ -47,8 +47,27 @@ measuring volume.
 - **[ntfy](https://github.com/binwiederhier/ntfy)** for push (self-hosted or ntfy.sh),
   and the ntfy app on your phone.
 - **Docker** for the cry detector.
-- A VPN (**WireGuard**/**Tailscale**) for remote access — don't expose these ports
-  to the internet (see [SECURITY.md](SECURITY.md)).
+- **Optional — remote access:** a VPN (**Tailscale** is easiest, or WireGuard) only if
+  you want to watch the *live video* while away from home. Not needed for cry alerts,
+  and never port-forward these unauthenticated ports to the internet (see
+  [SECURITY.md](SECURITY.md)).
+
+## Minimal setup (no VPN, no Frigate)
+
+You do **not** need Frigate (a separate NVR) or a VPN to use this. The only hard
+requirements are **cameras + go2rtc + Docker + ntfy**.
+
+- **At home (same Wi-Fi):** just open `http://<server-ip>:1985/multi.html` — no VPN.
+- **Away from home:** a phone on cellular / other Wi-Fi *cannot* reach your home
+  network by default (it's behind NAT/firewall). To watch live video remotely, add
+  **Tailscale** (install on the server + phone, log into the same account — ~5 min).
+  Do **not** port-forward go2rtc to the internet; it has no authentication.
+- **Cry alerts reach you anywhere regardless.** ntfy push flows *out* from your server
+  to your phone, so "baby is crying" notifications arrive even with no VPN — you just
+  can't open the live camera remotely until you add one.
+
+ntfy can be the public **ntfy.sh** (pick a hard-to-guess topic — zero setup) or
+self-hosted.
 
 ## Setup
 
