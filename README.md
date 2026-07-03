@@ -1,5 +1,9 @@
 # crywatch 👶
 
+![crywatch — multi-camera grid with an AI cry alert firing on one tile](docs/hero.png)
+
+<sub>*Grid view with the cry alert firing on the Bedroom camera (demo — placeholder feeds).*</sub>
+
 A private, self-hosted baby monitor that **actually knows the difference between
 crying and just being loud**. Camera feeds stream to your phone over WebRTC — nothing
 touches a vendor cloud — and a small AI model pushes an alert only when it hears a
