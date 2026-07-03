@@ -107,6 +107,27 @@ docker logs -f baby-cry-detector
 On the phone: install the **ntfy** app, point it at your server, and subscribe to
 the topic in `NTFY_URL`. Alerts arrive even with the phone asleep.
 
+## Remote access (optional — Tailscale, ~5 min)
+
+Everything above works on your home Wi-Fi with no VPN. To watch the **live video**
+while away from home, put the server and your phone on the same private network with
+[Tailscale](https://tailscale.com) (WireGuard under the hood, but zero-config):
+
+1. **On the server** — install and bring it up:
+   ```bash
+   curl -fsSL https://tailscale.com/install.sh | sh
+   sudo tailscale up
+   ```
+   Note its Tailscale address (`100.x.y.z`, or a MagicDNS name like `myserver`).
+2. **On your phone** — install the Tailscale app and log in with the **same account**.
+3. From anywhere, open `http://<tailscale-address>:1985/multi.html`.
+4. *(Recommended)* set `CRY_CLICK_URL` to that Tailscale address, so tapping a cry
+   notification opens the camera even when you're away.
+
+> **Do not** port-forward go2rtc to the internet — it has no authentication. Keeping it
+> behind Tailscale (or WireGuard) is what makes remote access safe. Prefer self-hosted
+> **WireGuard**? Same idea, more setup — out of scope here.
+
 ## Tuning
 
 Watch live classifications with `CRY_LOG=1` (`docker logs -f baby-cry-detector`):
