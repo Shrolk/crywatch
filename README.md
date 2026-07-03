@@ -62,9 +62,10 @@ requirements are **cameras + go2rtc + Docker + ntfy**.
   network by default (it's behind NAT/firewall). To watch live video remotely, add
   **Tailscale** (install on the server + phone, log into the same account — ~5 min).
   Do **not** port-forward go2rtc to the internet; it has no authentication.
-- **Cry alerts reach you anywhere regardless.** ntfy push flows *out* from your server
-  to your phone, so "baby is crying" notifications arrive even with no VPN — you just
-  can't open the live camera remotely until you add one.
+- **Cry alerts — depends on your ntfy:** with the **public ntfy.sh**
+  (`NTFY_URL=https://ntfy.sh/<topic>`), pushes reach your phone **anywhere, no VPN**.
+  With a **self-hosted** ntfy (the Compose default, kept on your LAN) your phone must be
+  able to reach it — on home Wi-Fi or on the VPN — to receive alerts while away.
 
 ntfy can be the public **ntfy.sh** (pick a hard-to-guess topic — zero setup) or
 self-hosted.
