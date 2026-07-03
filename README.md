@@ -1,4 +1,4 @@
-# Self-Hosted Baby Monitor 👶
+# crywatch 👶
 
 A private, self-hosted baby monitor that **actually knows the difference between
 crying and just being loud**. Camera feeds stream to your phone over WebRTC — nothing
