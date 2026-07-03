@@ -1,5 +1,7 @@
 # crywatch 👶
 
+English | [繁體中文](README.zh-TW.md)
+
 ![crywatch — multi-camera grid with an AI cry alert firing on one tile](docs/hero.png)
 
 <sub>*Grid view with the cry alert firing on the Bedroom camera (demo — placeholder feeds).*</sub>
