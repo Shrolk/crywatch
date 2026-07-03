@@ -57,6 +57,17 @@ measuring volume.
 You do **not** need Frigate (a separate NVR) or a VPN to use this. The only hard
 requirements are **cameras + go2rtc + Docker + ntfy**.
 
+**What works where:**
+
+| Where you are | Self-hosted ntfy (Compose default) | Public ntfy.sh |
+|---|---|---|
+| **At home** (same Wi-Fi) — live video + alerts | ✅ no VPN | ✅ no VPN |
+| **Away** — cry alerts | 🔒 needs VPN | ✅ no VPN |
+| **Away** — live video | 🔒 needs VPN | 🔒 needs VPN |
+
+To watch live video while away (or to get self-hosted alerts remotely), add a VPN —
+see the **Remote access (Tailscale)** section below.
+
 - **At home (same Wi-Fi):** just open `http://<server-ip>:1985/multi.html` — no VPN.
 - **Away from home:** a phone on cellular / other Wi-Fi *cannot* reach your home
   network by default (it's behind NAT/firewall). To watch live video remotely, add
