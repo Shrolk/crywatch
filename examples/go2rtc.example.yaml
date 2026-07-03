@@ -1,0 +1,34 @@
+# Minimal go2rtc config for the viewer + cry detector.
+# Copy to go2rtc.yaml and fill in your own camera credentials / IPs.
+# go2rtc docs: https://github.com/AlexxIT/go2rtc
+#
+# Most ONVIF/RTSP cameras expose two streams:
+#   stream1 = main / high-res     stream2 = sub / low-res
+# The browser plays H.264 over WebRTC but NOT H.265/HEVC — so make sure the
+# stream you view is H.264. If your camera's main stream is 4K H.265, either view
+# the H.264 sub-stream, or transcode to H.264 (out of scope here; see go2rtc's
+# `ffmpeg:` source or a mediamtx + NVENC relay).
+
+streams:
+  # Light sub-stream shown in the grid (low bitrate, survives remote/VPN).
+  cam1:
+    - rtsp://USER:PASSWORD@CAMERA_1_IP:554/stream2
+  # HD variant shown when you tap the tile to expand (must be H.264).
+  cam1_hd:
+    - rtsp://USER:PASSWORD@CAMERA_1_IP:554/stream1
+
+  cam2:
+    - rtsp://USER:PASSWORD@CAMERA_2_IP:554/stream2
+  cam2_hd:
+    - rtsp://USER:PASSWORD@CAMERA_2_IP:554/stream1
+
+api:
+  listen: ":1984"     # WebRTC signalling + snapshot API (the viewer calls this)
+rtsp:
+  listen: ":8554"     # the cry detector pulls audio from here
+webrtc:
+  listen: ":8555"
+  # If viewer and go2rtc are NOT on the same flat network, advertise a reachable
+  # candidate here, e.g.:
+  # candidates:
+  #   - YOUR_HOST_IP:8555

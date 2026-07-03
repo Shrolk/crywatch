@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Cameras</title>
+<style>
+  html, body { margin:0; padding:0; height:100%; background:#000; color:#fff;
+               font-family: -apple-system, system-ui, sans-serif;
+               overflow:hidden; touch-action:none; -webkit-user-select:none; user-select:none; }
+  #grid { position:fixed; inset:0; display:grid; gap:2px; padding:2px;
+          background:#111; box-sizing:border-box; }
+  /* Layout: side by side on landscape, stacked on portrait. Auto-fits any number of panels. */
+  /* A panel is a vertical stack: the video area (.media) on top, the control
+     bar (.ctrl) as a solid strip BELOW it — so the buttons never cover video. */
+  .panel { position:relative; display:flex; flex-direction:column;
+           overflow:hidden; background:#000; border-radius:6px; }
+  .media { position:relative; flex:1 1 auto; min-height:0; overflow:hidden; cursor:grab; }
+  .media.dragging { cursor:grabbing; }
+  .media video { position:absolute; top:50%; left:50%;
+                 width:100%; height:100%; object-fit:contain;
+                 transform-origin: center center;
+                 will-change: transform; }
+  .label { position:absolute; top:calc(.4em + 15px); left:.4em; z-index:5;
+           background:rgba(0,0,0,.55); padding:.2em .6em; border-radius:.5em;
+           font-size:.8em; opacity:.85; }
+  .zoomlbl { position:absolute; top:.4em; right:.4em; z-index:5;
+             background:rgba(0,0,0,.4); padding:.2em .5em; border-radius:.5em;
+             font-size:.7em; opacity:.6; }
+  /* Control bar: a full-width strip beneath the video, always visible. */
+  .ctrl { flex:0 0 auto; display:flex; gap:.3em; justify-content:center; align-items:center;
+          background:#0d0d0d; padding:.35em .4em; z-index:5; }
+  .ctrl button { background:#222; color:#fff; border:0;
+                 width:2em; height:2em; font-size:.95em; line-height:1;
+                 border-radius:50%; cursor:pointer; padding:0; }
+  .ctrl button:hover { background:#444; }
+  .status { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+            font-size:.95em; opacity:.7; pointer-events:none; text-align:center;
+            background:rgba(0,0,0,.4); padding:.5em .9em; border-radius:.5em; }
+  /* Startup loader: a YouTube-style spinner + a countdown estimate, shown while
+     a (re)connecting stream waits for its first keyframe. HD/transcoded C260
+     streams only emit a keyframe every ~3s, so a plain "switching…" felt stuck. */
+  .loader { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+            z-index:16; display:none; flex-direction:column; align-items:center; gap:.55em;
+            pointer-events:none; text-align:center; }
+  .loader.show { display:flex; }
+  .loader .ring { width:2.8em; height:2.8em; border-radius:50%;
+                  border:.22em solid rgba(255,255,255,.22); border-top-color:#fff;
+                  animation: spin .9s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .loader .cd { font-size:.85em; opacity:.92; font-variant-numeric:tabular-nums;
+                background:rgba(0,0,0,.5); padding:.25em .7em; border-radius:.6em; }
+
+  /* Focus mode: tap ⛶ to expand one panel full-screen (others hidden) and
+     upgrade its stream to HD; the ✕ (top-right) returns to the grid. */
+  /* Focused (expanded) view leaves a 120px gap at the top (clear of the notch/status bar). */
+  .panel.focused { position:fixed; inset:120px 0 0 0; z-index:100; border-radius:0; cursor:default; }
+  #grid.has-focus .panel:not(.focused) { display:none; }
+  #grid.has-focus ~ #cryToggle { display:none; }   /* hide the cry toggle while expanded */
+  /* Close button lives in the control bar (right of ⛶), shown only while focused. */
+  .ctrl .closebtn { display:none; }
+  .panel.focused .ctrl .closebtn { display:block; background:#b3261e; }
+  .panel.focused .ctrl .closebtn:hover { background:#8f1d18; }
+
+  /* Portrait phone: give each tile a real 16:9 shape (kills the big top/bottom
+     black bars), pack the 4 tiles together and centre them, and drop the cry-alert
+     toggle right below the bottom row so it's easy to reach with a thumb. */
+  @media (orientation: portrait) {
+    /* Vertical, scrollable feed: one full-width camera per row, scroll to see all. */
+    html, body { height:auto; min-height:100%; overflow-x:hidden; overflow-y:visible;
+                 touch-action:pan-y; }
+    body { display:block; }
+    #grid { position:static; inset:auto; width:100%;
+            grid-template-columns: 1fr !important;   /* single column (beats JS inline cols) */
+            grid-auto-rows:auto; padding-bottom:4.5em; }
+    /* Each row = a 16:9 video with its control strip beneath it. The focused
+       panel keeps its media filling the screen (control bar at the bottom). */
+    .panel:not(.focused) .media { aspect-ratio: 16 / 9; flex:none; width:100%; }
+    /* Cry-alert toggle floats, pinned bottom-centre while the feed scrolls. */
+    body #cryToggle { position:fixed; bottom:1em; left:50%; transform:translateX(-50%);
+                      top:auto; margin:0; z-index:200; padding:.7em 1.7em; font-size:1em;
+                      box-shadow:0 2px 10px rgba(0,0,0,.6); }
+  }
+  @media (orientation: landscape) {
+    #grid { grid-template-columns: repeat(2, 1fr); grid-auto-rows: 1fr; }
+  }
+
+  /* Cry alert (baby / C260 cams) */
+  #cryToggle { position:fixed; top:.5em; left:.5em; z-index:200;
+               background:rgba(0,0,0,.6); color:#fff; border:0; border-radius:1.4em;
+               padding:.45em .9em; font-size:.8em; cursor:pointer; opacity:.9; }
+  #cryToggle.on { background:#b3261e; }
+  .panel.crying .media { animation: cryflash .8s ease-in-out infinite; }
+  @keyframes cryflash { 0%,100% { box-shadow: inset 0 0 0 3px rgba(255,59,48,0); }
+                        50%     { box-shadow: inset 0 0 0 5px rgba(255,59,48,1); } }
+  .crybanner { position:absolute; top:2.4em; left:50%; transform:translateX(-50%); z-index:15;
+               background:#ff3b30; color:#fff; padding:.3em .7em; border-radius:.6em;
+               font-size:.85em; font-weight:600; display:none; white-space:nowrap; }
+  .panel.crying .crybanner { display:block; }
+</style>
+</head>
+<body>
+<div id="grid"></div>
+<button id="cryToggle" title="Cry alert for baby cameras">🔔 Cry alert: OFF</button>
+
+<script>
+(() => {
+  const params = new URLSearchParams(location.search);
+  // Camera streams to show, named exactly as in your go2rtc config. Override at runtime:
+  //   ?cams=cam1,cam2&labels=Room%201,Room%202
+  // Tip: put LIGHT sub-streams in the grid so it survives a remote/VPN connection
+  // (several hi-res streams can saturate the link); tap a tile to switch to HD.
+  const cams = (params.get('cams') || 'cam1,cam2').split(',').map(s => s.trim()).filter(Boolean);
+  const labels = (params.get('labels') || 'Room 1,Room 2').split(',').map(s => s.trim());
+  const GO2RTC_PORT = 1984;
+
+  // Tapping ⛶ to expand a panel swaps its light grid stream for an HD variant
+  // (and back to light when closed). Map each grid stream -> its HD stream name.
+  // Omit a stream to keep it on the same feed when expanded.
+  const HD = {
+    cam1: 'cam1_hd',
+    cam2: 'cam2_hd',
+  };
+
+  // ---- Cry detection state (baby = C260 cams) ----
+  let audioCtx = null, alertsOn = false, CRY_THRESH = 90;   // level 0-255 in the 300-1000Hz band
+  const CRY_SUSTAIN_MS = 1500, CRY_COOLDOWN_MS = 60000;
+  const babies = [];
+
+  // Adjust layout for >2 cameras automatically
+  if (cams.length > 2) {
+    const cols = Math.ceil(Math.sqrt(cams.length));
+    document.getElementById('grid').style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  }
+
+  const grid = document.getElementById('grid');
+  cams.forEach((cam, i) => grid.appendChild(makePanel(cam, labels[i] || cam)));
+
+  // ---- Cry alert: toggle button + monitor loop ----
+  const cryBtn = document.getElementById('cryToggle');
+  function enableAlerts() {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      alertsOn = true;
+      cryBtn.classList.add('on'); cryBtn.textContent = '🔔 Cry alert: ON';
+      if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+      babies.forEach(b => b.attach());
+      // Ask for notification permission in the background — never block the visual/beep alert on it.
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission().catch(() => {});
+      }
+    } catch (e) {}
+  }
+  function disableAlerts() {
+    alertsOn = false;
+    cryBtn.classList.remove('on'); cryBtn.textContent = '🔔 Cry alert: OFF';
+    babies.forEach(b => { b.loudSince = 0; b.panel.classList.remove('crying'); });
+  }
+  cryBtn.onclick = () => alertsOn ? disableAlerts() : enableAlerts();
+
+  function fireCryAlert(label) {
+    const body = `👶 Baby may be crying — ${label}`;
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try { new Notification('Baby cry alert', { body, tag: 'cry-' + label, renotify: true }); } catch (e) {}
+    }
+    try {  // short beep
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.frequency.value = 880; g.gain.value = 0.25;
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(); o.stop(audioCtx.currentTime + 0.3);
+    } catch (e) {}
+  }
+
+  function cryTick(now) {
+    if (!alertsOn) return;
+    babies.forEach(b => {
+      const lvl = b.getLevel();
+      if (lvl >= CRY_THRESH) {
+        if (!b.loudSince) b.loudSince = now;
+        if (now - b.loudSince >= CRY_SUSTAIN_MS) {
+          b.panel.classList.add('crying');
+          if (now - b.lastAlert >= CRY_COOLDOWN_MS) { b.lastAlert = now; fireCryAlert(b.label); }
+        }
+      } else {
+        b.loudSince = 0; b.panel.classList.remove('crying');
+      }
+    });
+  }
+  setInterval(() => cryTick(Date.now()), 200);
+
+  // Console helpers for tuning/testing: __cry.levels(), __cry.setThreshold(n), __cry.fire()
+  window.__cry = {
+    fire: () => fireCryAlert('test'),
+    levels: () => babies.map(b => ({ label: b.label, level: Math.round(b.getLevel()) })),
+    setThreshold: v => (CRY_THRESH = v),
+    get threshold() { return CRY_THRESH; },
+    tick: now => cryTick(now),           // manual tick for testing (accepts a timestamp)
+  };
+
+  function makePanel(streamName, label) {
+    const panel = document.createElement('div');
+    panel.className = 'panel';
+    panel.innerHTML = `
+      <div class="media">
+        <video autoplay muted playsinline></video>
+        <div class="label">${label}</div>
+        <div class="zoomlbl">100%</div>
+        <div class="crybanner">👶 Baby may be crying</div>
+        <div class="status">connecting…</div>
+        <div class="loader"><div class="ring"></div><div class="cd"></div></div>
+      </div>
+      <div class="ctrl">
+        <button data-act="mute" title="Toggle audio">🔇</button>
+        <button data-act="out" title="Zoom out">−</button>
+        <button data-act="reset" title="Reset">↺</button>
+        <button data-act="in" title="Zoom in">+</button>
+        <button data-act="fs" title="Fullscreen">⛶</button>
+        <button data-act="close" class="closebtn" title="Close">✕</button>
+      </div>`;
+    const v = panel.querySelector('video');
+    const media = panel.querySelector('.media');
+    const status = panel.querySelector('.status');
+    const zoomlbl = panel.querySelector('.zoomlbl');
+    const cryBanner = panel.querySelector('.crybanner');
+    const isBaby = true;   // browser-side cry flash runs on every panel; scope this if you like
+    let currentSrc = streamName;   // switches to the HD variant while focused
+    let hdFails = 0;               // consecutive HD-connect failures (transcoder warming up)
+    let pc = null, gen = 0;        // gen: generation guard so overlapping start()s can't clash
+    let analyser = null, freqData = null;
+
+    // ---- Startup loader: spinner + countdown while waiting for the first frame ----
+    const loader = panel.querySelector('.loader');
+    const loaderCd = loader.querySelector('.cd');
+    let loaderTimer = null, loadingSince = 0;
+    // HD (transcoded) streams emit a keyframe every ~3s, plus connect time -> ~5s;
+    // the light grid streams come up in ~3s. The video clears the loader the
+    // instant it actually plays, so if it's faster the countdown just ends early.
+    const loadEstimate = () => (currentSrc !== streamName ? 5 : 3);
+    // "Real video is showing" — a decoded frame at a sane size (filters the 1–2px
+    // garbage frame that flashes before the first keyframe) with the clock ticking.
+    // This, not the 'playing' event, is our signal to drop the loader.
+    const videoReady = () => v.videoWidth >= 320 && v.readyState >= 2 && v.currentTime > 0;
+    function tickLoader() {
+      if (!loadingSince) return;
+      if (videoReady()) { endLoading(); return; }
+      const elapsed = (Date.now() - loadingSince) / 1000;
+      const isHd = currentSrc !== streamName;
+      // Watchdog: if the HD stream connects but never delivers a frame within ~8s,
+      // give up and drop to the reliable 720p base stream instead of spinning forever.
+      if (isHd && elapsed > 8) { currentSrc = streamName; restartStream(); return; }
+      const remain = Math.ceil(loadEstimate() - elapsed);
+      loaderCd.textContent = (isHd ? 'Loading HD' : 'Loading') + (remain > 0 ? ' ' + remain : '…');
+    }
+    function beginLoading() {
+      status.style.display = 'none';
+      if (!loadingSince) loadingSince = Date.now();   // keep counting across retries
+      loader.classList.add('show');
+      tickLoader();
+      if (!loaderTimer) loaderTimer = setInterval(tickLoader, 250);
+    }
+    function endLoading() {
+      loadingSince = 0;
+      if (loaderTimer) { clearInterval(loaderTimer); loaderTimer = null; }
+      loader.classList.remove('show');
+    }
+
+    function attachAnalyser() {
+      if (!audioCtx || !isBaby || !v.srcObject) return;
+      try {
+        const src = audioCtx.createMediaStreamSource(v.srcObject);
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 2048; analyser.smoothingTimeConstant = 0.5;
+        freqData = new Uint8Array(analyser.frequencyBinCount);
+        src.connect(analyser);   // analysis only — not routed to the speakers
+      } catch (e) {}
+    }
+    function cryLevel() {
+      if (!analyser) return 0;
+      analyser.getByteFrequencyData(freqData);
+      const binHz = audioCtx.sampleRate / analyser.fftSize;
+      const lo = Math.floor(300 / binHz), hi = Math.min(freqData.length - 1, Math.ceil(1000 / binHz));
+      let s = 0, n = 0;
+      for (let i = lo; i <= hi; i++) { s += freqData[i]; n++; }
+      return n ? s / n : 0;
+    }
+
+    // ---- WebRTC connect ----
+    // Each (re)start bumps `gen`; any older in-flight attempt sees a newer gen and
+    // bails out (closing its own pc) instead of writing to the shared state. Without
+    // this, the base-stream reconnect fired when you close the panel would still be
+    // mid-negotiation when you re-open, and the two attempts clobbered each other's
+    // PeerConnection — that was the "works once, then spins forever" bug.
+    async function start() {
+      const myGen = ++gen;
+      const stale = () => myGen !== gen;
+      beginLoading();
+      const myPc = new RTCPeerConnection({
+        // Empty iceServers = host candidates only. Ideal when the viewer and go2rtc
+        // are on the same flat network (LAN, or a VPN like WireGuard/Tailscale): it
+        // skips a STUN round-trip and connects ~1s faster. If they're NOT on the same
+        // flat network, add a STUN server, e.g.:
+        //   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+        iceServers: [],
+        bundlePolicy: 'max-bundle',
+      });
+      pc = myPc;
+      myPc.addTransceiver('video', { direction: 'recvonly' });
+      myPc.addTransceiver('audio', { direction: 'recvonly' });
+      myPc.ontrack = e => {
+        if (stale()) return;
+        if (v.srcObject !== e.streams[0]) {
+          v.srcObject = e.streams[0]; v.play().catch(()=>{});
+          if (isBaby && alertsOn) attachAnalyser();
+        }
+      };
+      myPc.onconnectionstatechange = () => {
+        if (stale()) return;
+        const s = myPc.connectionState;
+        if (s === 'connected') status.style.display = 'none';
+        else if (s === 'failed' || s === 'disconnected') {
+          loadingSince = 0;              // fresh countdown for the reconnect
+          setTimeout(() => { if (!stale()) start(); }, 1500);
+        }
+      };
+      try {
+        const offer = await myPc.createOffer();
+        if (stale()) return myPc.close();
+        await myPc.setLocalDescription(offer);
+        await new Promise(resolve => {
+          if (myPc.iceGatheringState === 'complete') return resolve();
+          const t = setTimeout(resolve, 600);   // host-only candidates gather fast; short safety cap
+          myPc.addEventListener('icegatheringstatechange', () => {
+            if (myPc.iceGatheringState === 'complete') { clearTimeout(t); resolve(); }
+          });
+        });
+        if (stale()) return myPc.close();
+        const resp = await fetch(
+          `${location.protocol}//${location.hostname}:${GO2RTC_PORT}/api/webrtc?src=${encodeURIComponent(currentSrc)}`,
+          { method: 'POST', body: myPc.localDescription.sdp,
+            headers: { 'Content-Type': 'application/sdp' } });
+        if (stale()) return myPc.close();
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const answer = await resp.text();
+        if (stale()) return myPc.close();
+        await myPc.setRemoteDescription({ type: 'answer', sdp: answer });
+        hdFails = 0;
+      } catch (err) {
+        if (stale()) { try { myPc.close(); } catch (e) {} return; }
+        // The transcoded HD stream can briefly 500 while the NVENC encoder
+        // reconnects to the camera. Keep the loader/countdown running across
+        // retries instead of flashing a raw error; if HD really won't come up,
+        // fall back to the base stream so the panel still shows live video.
+        if (currentSrc !== streamName && ++hdFails >= 5) {
+          hdFails = 0; currentSrc = streamName;   // give up HD -> reliable base
+        }
+        setTimeout(() => { if (!stale()) start(); }, 1500);
+      }
+    }
+    start();
+    // Drop the loader only once a real frame is on screen (see videoReady); the
+    // 'playing' event can fire on a garbage pre-keyframe, so guard both signals.
+    v.addEventListener('playing', () => { status.style.display = 'none'; if (videoReady()) endLoading(); });
+    v.addEventListener('timeupdate', () => { if (loadingSince && videoReady()) endLoading(); });
+
+    // ---- Focus mode: expand this panel + switch to its HD stream ----
+    function restartStream() {
+      if (pc) { try { pc.close(); } catch (e) {} pc = null; }
+      v.srcObject = null;         // clear the old frame so the loader shows over black
+      loadingSince = 0;           // fresh estimate/countdown for the new stream
+      start();
+    }
+    function enterFocus() {
+      if (panel.classList.contains('focused')) return;
+      grid.classList.add('has-focus');
+      panel.classList.add('focused');
+      const hd = HD[streamName];
+      if (hd && currentSrc !== hd) { currentSrc = hd; restartStream(); }
+    }
+    function exitFocus() {
+      if (!panel.classList.contains('focused')) return;
+      panel.classList.remove('focused');
+      grid.classList.remove('has-focus');
+      scale = 1; tx = 0; ty = 0; apply();          // reset any digital zoom
+      if (currentSrc !== streamName) { currentSrc = streamName; restartStream(); }
+    }
+    // ---- Per-panel zoom/pan ----
+    let scale = 1, tx = 0, ty = 0;
+    const MIN = 1, MAX = 8;
+    function clampPan() {
+      if (scale <= 1) { tx = 0; ty = 0; return; }
+      const w = media.clientWidth, h = media.clientHeight;
+      const maxX = (w * (scale - 1)) / 2, maxY = (h * (scale - 1)) / 2;
+      tx = Math.max(-maxX, Math.min(maxX, tx));
+      ty = Math.max(-maxY, Math.min(maxY, ty));
+    }
+    function apply() {
+      clampPan();
+      v.style.transform = `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px)) scale(${scale})`;
+      zoomlbl.textContent = Math.round(scale * 100) + '%';
+    }
+    function setScale(s, cx, cy) {
+      const ns = Math.max(MIN, Math.min(MAX, s));
+      if (cx !== undefined && cy !== undefined) {
+        const r = media.getBoundingClientRect();
+        const ox = cx - r.left - r.width / 2, oy = cy - r.top - r.height / 2;
+        const k = ns / scale;
+        tx = ox - (ox - tx) * k; ty = oy - (oy - ty) * k;
+      }
+      scale = ns; apply();
+    }
+
+    // Buttons
+    const muteBtn = panel.querySelector('[data-act="mute"]');
+    panel.querySelectorAll('.ctrl button').forEach(b => {
+      b.onclick = e => {
+        e.stopPropagation();
+        const act = b.dataset.act;
+        if (act === 'in') setScale(scale * 1.4);
+        else if (act === 'out') setScale(scale / 1.4);
+        else if (act === 'reset') { scale = 1; tx = 0; ty = 0; apply(); }
+        else if (act === 'fs') { enterFocus(); }
+        else if (act === 'close') { exitFocus(); }
+        else if (act === 'mute') {
+          if (v.muted) {
+            // Radio behavior: mute every other panel first so only this one plays audio
+            document.querySelectorAll('#grid video').forEach(other => {
+              if (other !== v && !other.muted) {
+                other.muted = true;
+                const ob = other.closest('.panel').querySelector('[data-act="mute"]');
+                if (ob) ob.textContent = '🔇';
+              }
+            });
+            v.muted = false;
+            muteBtn.textContent = '🔊';
+          } else {
+            v.muted = true;
+            muteBtn.textContent = '🔇';
+          }
+        }
+      };
+    });
+    // Keep button icon in sync if external code changes muted state
+    v.addEventListener('volumechange', () => {
+      muteBtn.textContent = v.muted ? '🔇' : '🔊';
+    });
+
+    // Mouse drag + wheel
+    let dragging = false, lx = 0, ly = 0;
+    media.addEventListener('mousedown', e => { if (e.target.tagName === 'BUTTON') return; dragging = true; lx = e.clientX; ly = e.clientY; media.classList.add('dragging'); });
+    window.addEventListener('mouseup', () => { dragging = false; media.classList.remove('dragging'); });
+    window.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      tx += e.clientX - lx; ty += e.clientY - ly;
+      lx = e.clientX; ly = e.clientY; apply();
+    });
+    media.addEventListener('wheel', e => {
+      e.preventDefault();
+      const f = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      setScale(scale * f, e.clientX, e.clientY);
+    }, { passive: false });
+
+    // Touch: 1 finger pan, 2 finger pinch
+    let pinchStartDist = 0, pinchStartScale = 1, pinchCx = 0, pinchCy = 0, panMode = false;
+    media.addEventListener('touchstart', e => {
+      if (e.target.tagName === 'BUTTON') return;
+      if (e.touches.length === 2) {
+        const t0 = e.touches[0], t1 = e.touches[1];
+        pinchStartDist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+        pinchStartScale = scale;
+        pinchCx = (t0.clientX + t1.clientX) / 2; pinchCy = (t0.clientY + t1.clientY) / 2;
+        panMode = false;
+      } else if (e.touches.length === 1) {
+        panMode = true; lx = e.touches[0].clientX; ly = e.touches[0].clientY;
+      }
+    }, { passive: false });
+    media.addEventListener('touchmove', e => {
+      if (e.target.tagName === 'BUTTON') return;
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const t0 = e.touches[0], t1 = e.touches[1];
+        const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+        setScale(pinchStartScale * (dist / pinchStartDist), pinchCx, pinchCy);
+      } else if (e.touches.length === 1 && panMode) {
+        if (scale <= 1) return;   // not zoomed -> let the page scroll vertically
+        e.preventDefault();
+        tx += e.touches[0].clientX - lx; ty += e.touches[0].clientY - ly;
+        lx = e.touches[0].clientX; ly = e.touches[0].clientY; apply();
+      }
+    }, { passive: false });
+
+    // Double-click / double-tap to toggle 1x ↔ 2.5x
+    let lastTap = 0;
+    media.addEventListener('click', e => {
+      if (e.target.tagName === 'BUTTON') return;
+      const now = Date.now();
+      if (now - lastTap < 300) {
+        if (scale > 1.05) { scale = 1; tx = 0; ty = 0; apply(); }
+        else setScale(2.5, e.clientX, e.clientY);
+      }
+      lastTap = now;
+    });
+
+    apply();
+    if (isBaby) babies.push({ label, panel, getLevel: cryLevel, attach: attachAnalyser, loudSince: 0, lastAlert: 0 });
+    return panel;
+  }
+})();
+</script>
+</body>
+</html>

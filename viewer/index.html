@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Camera</title>
+<style>
+  html, body { margin:0; padding:0; height:100%; background:#000; color:#fff;
+               font-family: -apple-system, system-ui, sans-serif;
+               overflow:hidden; touch-action:none; -webkit-user-select:none; user-select:none; }
+  #wrap { position:fixed; inset:0; overflow:hidden; cursor:grab; }
+  #wrap.dragging { cursor:grabbing; }
+  video { position:absolute; top:50%; left:50%;
+          width:100vw; height:100vh; object-fit:contain;
+          transform-origin: center center;
+          will-change: transform; }
+  #ctrl { position:fixed; bottom: max(1em, env(safe-area-inset-bottom));
+          left:50%; transform:translateX(-50%); z-index:10;
+          display:flex; gap:.4em;
+          background:rgba(0,0,0,.55); backdrop-filter: blur(8px);
+          padding:.4em .6em; border-radius:2em;
+          box-shadow: 0 4px 12px rgba(0,0,0,.4); }
+  button { background:#222; color:#fff; border:0;
+           width:2.6em; height:2.6em; font-size:1.3em; line-height:1;
+           border-radius:50%; cursor:pointer;
+           transition: background .15s; }
+  button:hover { background:#444; }
+  button:active { background:#666; }
+  #zoomlbl { position:fixed; top: max(.5em, env(safe-area-inset-top));
+             left: max(.6em, env(safe-area-inset-left));
+             font-size:.85em; opacity:.7;
+             background:rgba(0,0,0,.4); padding:.2em .6em; border-radius:.6em;
+             z-index:10; }
+  #status { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+            font-size:1.1em; opacity:.7; pointer-events:none; text-align:center;
+            background:rgba(0,0,0,.4); padding:.6em 1em; border-radius:.6em; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <video id="v" autoplay muted playsinline></video>
+</div>
+<div id="zoomlbl">100%</div>
+<div id="status">connecting…</div>
+<div id="ctrl">
+  <button id="mute" title="Toggle audio">🔇</button>
+  <button id="zoomout" title="Zoom out">−</button>
+  <button id="reset" title="Reset">↺</button>
+  <button id="zoomin" title="Zoom in">+</button>
+  <button id="fs" title="Fullscreen">⛶</button>
+</div>
+
+<script>
+(() => {
+  const STREAM = new URLSearchParams(location.search).get('src') || 'cam1';
+  const GO2RTC_PORT = 1984;
+  const v = document.getElementById('v');
+  const wrap = document.getElementById('wrap');
+  const zoomlbl = document.getElementById('zoomlbl');
+  const status = document.getElementById('status');
+
+  // ---- WebRTC player (handles PCMA audio natively, sub-second latency) ----
+  async function startWebRTC() {
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      bundlePolicy: 'max-bundle',
+    });
+
+    // Receive only — recvonly transceivers signal "send me video and audio"
+    pc.addTransceiver('video', { direction: 'recvonly' });
+    pc.addTransceiver('audio', { direction: 'recvonly' });
+
+    pc.ontrack = (e) => {
+      if (v.srcObject !== e.streams[0]) {
+        v.srcObject = e.streams[0];
+        v.play().catch(() => {});
+      }
+    };
+    pc.onconnectionstatechange = () => {
+      const s = pc.connectionState;
+      if (s === 'connected') status.style.display = 'none';
+      else if (s === 'failed' || s === 'disconnected') {
+        status.style.display = 'block';
+        status.textContent = 'reconnecting…';
+        setTimeout(startWebRTC, 1500);
+      }
+    };
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    // Wait for ICE gathering complete (or 1.5s timeout)
+    await new Promise(resolve => {
+      if (pc.iceGatheringState === 'complete') return resolve();
+      const t = setTimeout(resolve, 1500);
+      pc.addEventListener('icegatheringstatechange', () => {
+        if (pc.iceGatheringState === 'complete') { clearTimeout(t); resolve(); }
+      });
+    });
+
+    try {
+      const resp = await fetch(
+        `${location.protocol}//${location.hostname}:${GO2RTC_PORT}/api/webrtc?src=${encodeURIComponent(STREAM)}`,
+        { method: 'POST', body: pc.localDescription.sdp,
+          headers: { 'Content-Type': 'application/sdp' } }
+      );
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const answerSDP = await resp.text();
+      await pc.setRemoteDescription({ type: 'answer', sdp: answerSDP });
+    } catch (err) {
+      status.textContent = 'connection error: ' + err.message + ' — retrying…';
+      setTimeout(startWebRTC, 2000);
+    }
+  }
+  startWebRTC();
+  v.addEventListener('playing', () => status.style.display = 'none');
+
+  // ---- Pan + zoom state ----
+  let scale = 1, tx = 0, ty = 0;
+  const MIN = 1, MAX = 8;
+
+  function clampPan() {
+    if (scale <= 1) { tx = 0; ty = 0; return; }
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+    const maxX = (w * (scale - 1)) / 2;
+    const maxY = (h * (scale - 1)) / 2;
+    tx = Math.max(-maxX, Math.min(maxX, tx));
+    ty = Math.max(-maxY, Math.min(maxY, ty));
+  }
+  function apply() {
+    clampPan();
+    v.style.transform = `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px)) scale(${scale})`;
+    zoomlbl.textContent = Math.round(scale * 100) + '%';
+  }
+  function setScale(s, cx, cy) {
+    const newScale = Math.max(MIN, Math.min(MAX, s));
+    if (cx !== undefined && cy !== undefined) {
+      const rect = wrap.getBoundingClientRect();
+      const ox = cx - rect.left - rect.width / 2;
+      const oy = cy - rect.top - rect.height / 2;
+      const k = newScale / scale;
+      tx = ox - (ox - tx) * k;
+      ty = oy - (oy - ty) * k;
+    }
+    scale = newScale;
+    apply();
+  }
+
+  // ---- Buttons ----
+  document.getElementById('zoomin').onclick = () => setScale(scale * 1.4);
+  document.getElementById('zoomout').onclick = () => setScale(scale / 1.4);
+  document.getElementById('reset').onclick = () => { scale = 1; tx = 0; ty = 0; apply(); };
+  document.getElementById('fs').onclick = () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else (document.documentElement.requestFullscreen || (() => {})).call(document.documentElement);
+  };
+  const muteBtn = document.getElementById('mute');
+  muteBtn.onclick = () => { v.muted = !v.muted; };
+  v.addEventListener('volumechange', () => {
+    muteBtn.textContent = v.muted ? '🔇' : '🔊';
+  });
+
+  // ---- Mouse: drag to pan, wheel to zoom ----
+  let dragging = false, lx = 0, ly = 0;
+  wrap.addEventListener('mousedown', e => { dragging = true; lx = e.clientX; ly = e.clientY; wrap.classList.add('dragging'); });
+  window.addEventListener('mouseup', () => { dragging = false; wrap.classList.remove('dragging'); });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    tx += e.clientX - lx; ty += e.clientY - ly;
+    lx = e.clientX; ly = e.clientY; apply();
+  });
+  wrap.addEventListener('wheel', e => {
+    e.preventDefault();
+    const f = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    setScale(scale * f, e.clientX, e.clientY);
+  }, { passive: false });
+
+  // ---- Touch: 1 finger pan, 2 finger pinch zoom ----
+  let pinchStartDist = 0, pinchStartScale = 1, pinchCx = 0, pinchCy = 0;
+  let panMode = false;
+  wrap.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      const t0 = e.touches[0], t1 = e.touches[1];
+      pinchStartDist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+      pinchStartScale = scale;
+      pinchCx = (t0.clientX + t1.clientX) / 2;
+      pinchCy = (t0.clientY + t1.clientY) / 2;
+      panMode = false;
+    } else if (e.touches.length === 1) {
+      panMode = true;
+      lx = e.touches[0].clientX; ly = e.touches[0].clientY;
+    }
+  }, { passive: false });
+  wrap.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (e.touches.length === 2) {
+      const t0 = e.touches[0], t1 = e.touches[1];
+      const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+      setScale(pinchStartScale * (dist / pinchStartDist), pinchCx, pinchCy);
+    } else if (e.touches.length === 1 && panMode) {
+      tx += e.touches[0].clientX - lx;
+      ty += e.touches[0].clientY - ly;
+      lx = e.touches[0].clientX; ly = e.touches[0].clientY;
+      apply();
+    }
+  }, { passive: false });
+
+  // ---- Double-click / double-tap to toggle 1x ↔ 2.5x ----
+  let lastTap = 0;
+  wrap.addEventListener('click', e => {
+    const now = Date.now();
+    if (now - lastTap < 300) {
+      if (scale > 1.05) { scale = 1; tx = 0; ty = 0; apply(); }
+      else setScale(2.5, e.clientX, e.clientY);
+    }
+    lastTap = now;
+  });
+
+  apply();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+# ===== secrets — NEVER commit =====
+.env
+*.env
+!.env.example
+*.key
+*.pem
+*_private.key
+.jwt_secret
+# WireGuard / camera client configs — contain private keys
+*.conf
+# your real config with camera credentials (commit the .example instead)
+go2rtc.yaml
+go2rtc/
+
+# ===== runtime data / recordings =====
+*.db
+*.db-shm
+*.db-wal
+frigate/
+ntfy/
+storage/
+clips/
+recordings/
+model_cache/
+*.mp4
+*.webp
+
+# ===== python =====
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# ===== tooling / editor =====
+.gstack/
+.DS_Store
+.idea/
+.vscode/
