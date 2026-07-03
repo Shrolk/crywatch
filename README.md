@@ -99,6 +99,46 @@ and subscribe to your topic in the ntfy app. That's it — only two files to edi
   `NTFY_URL=https://ntfy.sh/<your-unique-topic>` in `.env`.
 - Want to run the pieces by hand instead? See the manual steps below.
 
+## Running on macOS / Windows (Docker Desktop)
+
+This stack is built for a **Linux host** (a NAS, mini-PC, an old laptop on Linux, a Pi,
+or a VPS) — that's what you'd run a 24/7 monitor on. On **Docker Desktop** (macOS /
+Windows) Docker runs inside a Linux VM, so `network_mode: host` refers to that VM, not
+your computer. The **cry detector, push, and the viewer page all work fine** — only the
+**WebRTC live video** needs a tweak, because host networking + auto ICE candidates don't
+reach the browser. Two options:
+
+**A. (easiest) Enable Docker Desktop host networking.** Recent Docker Desktop has
+*Settings → Resources → Network → Enable host networking* (beta). Turn it on and the
+default `docker-compose.yml` may work as-is.
+
+**B. Use published ports + a WebRTC candidate:**
+
+1. In `docker-compose.yml`, remove `network_mode: host` from **both** `go2rtc` and
+   `cry-detector`, and give `go2rtc` published ports:
+   ```yaml
+   go2rtc:
+     image: alexxit/go2rtc:latest
+     ports: ["1984:1984", "8554:8554", "8555:8555/tcp", "8555:8555/udp"]
+     volumes:
+       - ./go2rtc.yaml:/config/go2rtc.yaml:ro
+   ```
+2. In `go2rtc.yaml`, advertise your computer's LAN IP so the browser can reach WebRTC:
+   ```yaml
+   webrtc:
+     listen: ":8555"
+     candidates:
+       - <YOUR_LAN_IP>:8555      # e.g. 192.168.1.50:8555
+   ```
+3. In `.env`, point the detector at the service names instead of localhost:
+   ```
+   GO2RTC_RTSP=rtsp://go2rtc:8554
+   NTFY_URL=http://ntfy/<your-topic>
+   ```
+
+On Linux none of this is needed — host networking handles it, which is why it's the
+default. For a long-running monitor, a small Linux box is the smoothest option.
+
 ## Setup (manual, without Compose)
 
 ### 1. go2rtc + cameras
