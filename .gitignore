@@ -18,6 +18,7 @@ go2rtc/
 *.db-wal
 frigate/
 ntfy/
+ntfy-cache/
 storage/
 clips/
 recordings/

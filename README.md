@@ -69,7 +69,25 @@ requirements are **cameras + go2rtc + Docker + ntfy**.
 ntfy can be the public **ntfy.sh** (pick a hard-to-guess topic — zero setup) or
 self-hosted.
 
-## Setup
+## Quick start (Docker Compose)
+
+Brings up the whole stack — go2rtc, the viewer, the cry detector, and ntfy:
+
+```bash
+cp examples/go2rtc.example.yaml go2rtc.yaml   # add your cameras (IPs + credentials)
+cp .env.example .env                          # set your ntfy topic, cameras, tuning
+docker compose up -d --build
+```
+
+Then open `http://<server-ip>:1985/multi.html?cams=cam1,cam2&labels=Nursery,Bedroom`
+and subscribe to your topic in the ntfy app. That's it — only two files to edit
+(`go2rtc.yaml` for your cameras, `.env` for your ntfy topic).
+
+- Prefer zero-setup push? Delete the `ntfy` service in `docker-compose.yml` and set
+  `NTFY_URL=https://ntfy.sh/<your-unique-topic>` in `.env`.
+- Want to run the pieces by hand instead? See the manual steps below.
+
+## Setup (manual, without Compose)
 
 ### 1. go2rtc + cameras
 

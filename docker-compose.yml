@@ -1,0 +1,70 @@
+# One-command stack: go2rtc (streaming hub) + viewer + cry detector + ntfy (push).
+#
+# Quick start:
+#   1. cp examples/go2rtc.example.yaml go2rtc.yaml   # <- add your cameras here
+#   2. cp .env.example .env                          # <- set your ntfy topic, cams, tuning
+#   3. docker compose up -d --build
+#   Then open  http://<server-ip>:1985/multi.html?cams=cam1,cam2&labels=Nursery,Bedroom
+#
+# NOTE: go2rtc and the detector use host networking — go2rtc needs it for WebRTC,
+# and the detector reaches go2rtc's RTSP on localhost. This is the normal setup on a
+# Linux host (typical homelab). On Docker Desktop (macOS/Windows) host networking
+# behaves differently; see go2rtc's docs.
+
+services:
+  # ---- streaming hub: RTSP in, WebRTC out ----
+  go2rtc:
+    image: alexxit/go2rtc:latest
+    container_name: go2rtc
+    restart: unless-stopped
+    network_mode: host                       # required for WebRTC
+    volumes:
+      - ./go2rtc.yaml:/config/go2rtc.yaml:ro  # your real config (gitignored)
+
+  # ---- static web viewer on :1985 ----
+  viewer:
+    image: nginx:alpine
+    container_name: baby-viewer
+    restart: unless-stopped
+    ports:
+      - "1985:80"
+    volumes:
+      - ./viewer:/usr/share/nginx/html:ro
+
+  # ---- YAMNet cry classifier (CPU-only) ----
+  cry-detector:
+    build: ./cry-detector
+    image: baby-cry-detector
+    container_name: baby-cry-detector
+    restart: unless-stopped
+    network_mode: host                       # reach go2rtc RTSP + ntfy on localhost
+    environment:
+      - PYTHONUTF8=1
+      # These read from .env if present, otherwise fall back to sane localhost defaults.
+      - NTFY_URL=${NTFY_URL:-http://localhost:8095/baby-cry}
+      - CRY_CLICK_URL=${CRY_CLICK_URL:-http://localhost:1985/multi.html}
+      - GO2RTC_RTSP=${GO2RTC_RTSP:-rtsp://localhost:8554}
+      - CAMS=${CAMS:-cam1=Room 1,cam2=Room 2}
+      - CRY_PROB=${CRY_PROB:-0.4}
+      - CRY_SUSTAIN_SAMPLES=${CRY_SUSTAIN_SAMPLES:-2}
+      - CRY_COOLDOWN=${CRY_COOLDOWN:-60}
+      - CRY_LOG=${CRY_LOG:-1}
+    depends_on:
+      - go2rtc
+      - ntfy
+
+  # ---- self-hosted push. Prefer zero-setup? Delete this service and point
+  #      NTFY_URL at https://ntfy.sh/<your-unique-topic> instead. ----
+  ntfy:
+    image: binwiederhier/ntfy:latest
+    container_name: ntfy
+    restart: unless-stopped
+    command: serve
+    ports:
+      - "8095:80"
+    environment:
+      - NTFY_BASE_URL=${NTFY_BASE_URL:-http://localhost:8095}
+      - NTFY_CACHE_FILE=/var/cache/ntfy/cache.db
+      - NTFY_UPSTREAM_BASE_URL=https://ntfy.sh   # relays iOS push; drop if Android-only
+    volumes:
+      - ./ntfy-cache:/var/cache/ntfy
