@@ -11,7 +11,7 @@ crying and just being loud**. Camera feeds stream to your phone over WebRTC — 
 touches a vendor cloud — and a small AI model pushes an alert only when it hears a
 real baby cry (not the vacuum, the TV, or you talking).
 
-Two small pieces:
+The pieces:
 
 - **`viewer/`** — a dependency-free web viewer: multi-camera grid, tap-to-expand,
   pinch-zoom, mobile portrait feed, and a startup spinner. Talks to
@@ -19,6 +19,10 @@ Two small pieces:
 - **`cry-detector/`** — a server-side classifier that runs **Google's YAMNet**
   (AudioSet) on short audio clips and pushes a [ntfy](https://ntfy.sh) notification
   when it detects crying. **Runs on CPU. No GPU required.**
+- **`vision/`** *(optional)* — teach it to *see*. A full pipeline to train your **own**
+  detector that knows whether the baby is actually in the crib (even night-vision,
+  even under a blanket), with an active-learning loop and AI-assisted labeling. Ships
+  no model and no images — you train your own. → **[vision/README.md](vision/README.md)**
 
 ---
 

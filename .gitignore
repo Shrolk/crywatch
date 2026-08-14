@@ -37,3 +37,28 @@ venv/
 .DS_Store
 .idea/
 .vscode/
+
+# ===== vision module — NEVER commit your baby's data or trained model =====
+# Weights are fine-tuned on YOUR baby's footage — treat like private data.
+*.pt
+*.onnx
+*.engine
+# Captured frames, annotations, datasets, alerts — all contain real baby images.
+vision/**/frames/
+vision/**/labels/
+vision/**/prelabels/
+vision/**/dataset/
+vision/**/alerts/
+vision/**/annotated/
+vision/**/runs/
+# Runtime state / overlay data written by the detector.
+vision/**/boxes.json
+vision/**/zone.json
+vision/**/control.json
+# Block all images by default (they'd be baby photos)...
+*.jpg
+*.jpeg
+*.png
+# ...but DO keep documentation images (add explicitly, or they stay ignored).
+!vision/docs/*.png
+!docs/*.png

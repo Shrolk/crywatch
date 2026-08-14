@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Baby labeling tool</title>
+<style>
+  :root { color-scheme: dark; }
+  html,body { margin:0; background:#111; color:#eee; font-family:-apple-system,system-ui,sans-serif; }
+  #top { display:flex; gap:1em; align-items:center; flex-wrap:wrap; padding:.6em .8em; background:#1a1a1a; }
+  #top b { color:#4ade80; }
+  #bar { flex:1 1 200px; height:8px; background:#333; border-radius:4px; overflow:hidden; min-width:120px; }
+  #bar > i { display:block; height:100%; background:#4ade80; width:0; }
+  .wrap { display:flex; justify-content:center; padding:.6em; }
+  #stage { position:relative; display:inline-block; line-height:0; touch-action:none; max-width:96vw; }
+  #frame { display:block; max-width:96vw; max-height:74vh; user-select:none; -webkit-user-drag:none; }
+  #box { position:absolute; border:2px solid #ff3b30; box-sizing:border-box; cursor:move; display:none;
+         background:rgba(255,59,48,.08); }
+  .handle { position:absolute; width:16px; height:16px; background:#fff; border:2px solid #ff3b30;
+            border-radius:50%; transform:translate(-50%,-50%); }
+  .h-nw{left:0;top:0;cursor:nwse-resize} .h-n{left:50%;top:0;cursor:ns-resize} .h-ne{left:100%;top:0;cursor:nesw-resize}
+  .h-w{left:0;top:50%;cursor:ew-resize}  .h-e{left:100%;top:50%;cursor:ew-resize}
+  .h-sw{left:0;top:100%;cursor:nesw-resize} .h-s{left:50%;top:100%;cursor:ns-resize} .h-se{left:100%;top:100%;cursor:nwse-resize}
+  /* AI suggestion (prelabel, unconfirmed) = orange dashed; turns red once you touch or save it. */
+  #box.suggest { border-color:#f59e0b; border-style:dashed; background:rgba(245,158,11,.12); }
+  #box.suggest .handle { border-color:#f59e0b; }
+  #bottom { display:flex; gap:.5em; justify-content:center; flex-wrap:wrap; padding:.6em; }
+  button { background:#2a2a2a; color:#fff; border:1px solid #444; border-radius:.5em;
+           padding:.6em 1em; font-size:1em; cursor:pointer; }
+  button.primary { background:#1a7f37; border-color:#1a7f37; }
+  button.warn { background:#7a2018; border-color:#7a2018; }
+  #hint { text-align:center; color:#888; font-size:.8em; padding:0 .8em 1em; }
+  label.cf { font-size:.9em; color:#ccc; user-select:none; }
+</style>
+</head>
+<body>
+<div id="top">
+  <span>Progress <b id="prog">–</b></span>
+  <div id="bar"><i></i></div>
+  <span id="fname" style="font-size:.8em;color:#aaa"></span>
+  <span id="st" style="font-size:.85em"></span>
+  <label class="cf"><input type="checkbox" id="carry" checked> carry last box</label>
+  <button id="gotoUn">jump to unconfirmed</button>
+</div>
+
+<div class="wrap">
+  <div id="stage">
+    <img id="frame" alt="">
+    <div id="box">
+      <div class="handle h-nw" data-dir="nw"></div><div class="handle h-n" data-dir="n"></div><div class="handle h-ne" data-dir="ne"></div>
+      <div class="handle h-w"  data-dir="w"></div>                                            <div class="handle h-e" data-dir="e"></div>
+      <div class="handle h-sw" data-dir="sw"></div><div class="handle h-s" data-dir="s"></div><div class="handle h-se" data-dir="se"></div>
+    </div>
+  </div>
+</div>
+
+<div id="bottom">
+  <button id="prev">← prev</button>
+  <button id="clr" class="warn">🗑 clear box</button>
+  <button id="empty">no baby</button>
+  <button id="save" class="primary">save + next →</button>
+</div>
+<div id="hint">🔶 Orange dashed = AI suggestion: if it's right just "save →", otherwise drag the handles / "clear" and redraw / "no baby".<br>
+  Drag empty space to draw · drag corner/edge to resize · drag body to move　|　Keys: Enter/→ save+next · ← prev · E no baby · Backspace clear</div>
+
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const stage = $('#stage'), frame = $('#frame'), boxEl = $('#box');
+  let list = [], idx = 0, box = null, lastBox = null, suggested = false;
+  let mode = null, dir = null, snx = 0, sny = 0, ox = 0, oy = 0;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const cur = () => list[idx];
+
+  function pxToNorm(cx, cy) {
+    const r = stage.getBoundingClientRect();
+    return { nx: clamp((cx - r.left) / r.width, 0, 1), ny: clamp((cy - r.top) / r.height, 0, 1) };
+  }
+  function renderBox() {
+    boxEl.classList.toggle('suggest', !!box && suggested);
+    if (!box) { boxEl.style.display = 'none'; return; }
+    boxEl.style.display = 'block';
+    boxEl.style.left = (box.x * 100) + '%';
+    boxEl.style.top = (box.y * 100) + '%';
+    boxEl.style.width = (box.w * 100) + '%';
+    boxEl.style.height = (box.h * 100) + '%';
+  }
+  function applyResize(d, nx, ny) {
+    let x1 = box.x, y1 = box.y, x2 = box.x + box.w, y2 = box.y + box.h;
+    if (d.includes('w')) x1 = nx;
+    if (d.includes('e')) x2 = nx;
+    if (d.includes('n')) y1 = ny;
+    if (d.includes('s')) y2 = ny;
+    box.x = Math.min(x1, x2); box.w = Math.abs(x2 - x1);
+    box.y = Math.min(y1, y2); box.h = Math.abs(y2 - y1);
+  }
+
+  stage.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    suggested = false;   // touching (draw/resize/move) = you own it now -> solid red
+    try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+    const { nx, ny } = pxToNorm(e.clientX, e.clientY);
+    if (e.target.classList.contains('handle')) { mode = 'resize'; dir = e.target.dataset.dir; }
+    else if (box && e.target === boxEl) { mode = 'move'; snx = nx; sny = ny; ox = box.x; oy = box.y; }
+    else { box = { x: nx, y: ny, w: 0, h: 0 }; mode = 'resize'; dir = 'se'; renderBox(); }
+  });
+  stage.addEventListener('pointermove', e => {
+    if (!mode) return;
+    e.preventDefault();
+    const { nx, ny } = pxToNorm(e.clientX, e.clientY);
+    if (mode === 'resize') applyResize(dir, nx, ny);
+    else { box.x = clamp(ox + (nx - snx), 0, 1 - box.w); box.y = clamp(oy + (ny - sny), 0, 1 - box.h); }
+    renderBox();
+  });
+  stage.addEventListener('pointerup', () => {
+    if (mode === 'resize' && box && (box.w < 0.01 || box.h < 0.01)) box = null;
+    mode = null; renderBox();
+  });
+  frame.addEventListener('load', renderBox);
+  window.addEventListener('resize', renderBox);
+
+  async function loadList() {
+    const d = await (await fetch('/api/list')).json();
+    list = d.images;
+    const first = list.findIndex(i => !i.labeled);
+    idx = first < 0 ? 0 : first;
+    await load(idx);
+  }
+  function updateInfo() {
+    const done = list.filter(i => i.labeled).length;
+    const suggLeft = list.filter(i => !i.labeled && i.suggested).length;
+    $('#prog').textContent = `${done} / ${list.length} (unconfirmed ${list.length - done}, AI-suggested ${suggLeft})`;
+    $('#bar > i').style.width = (list.length ? done / list.length * 100 : 0) + '%';
+    $('#fname').textContent = cur() ? `[${idx + 1}] ${cur().name}` : '';
+    const c = cur();
+    if (c && c.labeled) { $('#st').textContent = '✓ confirmed'; $('#st').style.color = '#4ade80'; }
+    else if (suggested) { $('#st').textContent = '🔶 AI suggestion — save if right, adjust/clear if not'; $('#st').style.color = '#f59e0b'; }
+    else { $('#st').textContent = 'unlabeled (AI saw nothing — draw it or press "no baby")'; $('#st').style.color = '#f59e0b'; }
+  }
+  async function load(i) {
+    idx = clamp(i, 0, list.length - 1);
+    const it = cur();
+    frame.src = '/img?name=' + encodeURIComponent(it.name) + '&_=' + Date.now();
+    const lab = await (await fetch('/api/label?name=' + encodeURIComponent(it.name))).json();
+    suggested = false;
+    if (lab.status === 'box') box = { x: lab.box[0], y: lab.box[1], w: lab.box[2], h: lab.box[3] };
+    else if (lab.status === 'suggest') { box = { x: lab.box[0], y: lab.box[1], w: lab.box[2], h: lab.box[3] }; suggested = true; }
+    else if (lab.status === 'empty') box = null;
+    else box = ($('#carry').checked && lastBox) ? { ...lastBox } : null;
+    renderBox(); updateInfo();
+  }
+  async function post(body) {
+    await fetch('/api/label', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(body) });
+    cur().labeled = true;
+  }
+  async function saveNext() {
+    if (!box) { alert('Box the baby, or press "no baby"'); return; }
+    await post({ name: cur().name, box: [box.x, box.y, box.w, box.h] });
+    lastBox = { ...box };
+    if (idx < list.length - 1) await load(idx + 1); else updateInfo();
+  }
+  async function emptyNext() {
+    await post({ name: cur().name, empty: true });
+    if (idx < list.length - 1) await load(idx + 1); else updateInfo();
+  }
+  function prev() { if (idx > 0) load(idx - 1); }
+  function gotoUnlabeled() {
+    const n = list.findIndex((it, i) => i > idx && !it.labeled);
+    if (n >= 0) load(n); else alert('No more unconfirmed frames 🎉');
+  }
+
+  $('#save').onclick = saveNext;
+  $('#empty').onclick = emptyNext;
+  $('#prev').onclick = prev;
+  $('#clr').onclick = () => { box = null; renderBox(); };
+  $('#gotoUn').onclick = gotoUnlabeled;
+  window.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    if (e.key === 'Enter' || e.key === 'ArrowRight') { e.preventDefault(); saveNext(); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+    else if (e.key === 'e' || e.key === 'E') { e.preventDefault(); emptyNext(); }
+    else if (e.key === 'Backspace' || e.key === 'Delete') { e.preventDefault(); box = null; renderBox(); }
+  });
+
+  loadList();
+})();
+</script>
+</body>
+</html>

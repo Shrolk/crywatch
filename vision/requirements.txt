@@ -1,0 +1,7 @@
+# Detector + training + prelabel. The labeling tool (labeling/label_server.py) needs
+# nothing but the Python standard library.
+ultralytics>=8.3
+opencv-python-headless>=4.9
+numpy>=1.26
+# ultralytics pulls in torch. For GPU, install the CUDA build of torch that matches
+# your driver (see pytorch.org), or just use the official ultralytics Docker image.
