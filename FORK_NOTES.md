@@ -123,15 +123,17 @@ caméra Simon est intégrée dans HA (Generic Camera / ONVIF / Tapo Control /
 autre) — ça se contourne (certaines intégrations exposent le flux
 différemment) mais je ne peux pas deviner laquelle sans le savoir.
 
-**Hypothèse non vérifiée, à confirmer en premier** : l'intégration devine
-`crywatch_cry_detector` comme nom d'hôte interne pour joindre l'add-on
-(`const.py` → `DEFAULT_HOST`). C'est la convention Supervisor habituelle
-(hostname = slug de l'add-on sur le réseau Docker `hassio`), mais je n'ai
-aucun Home Assistant/Supervisor accessible ici pour le vérifier. Si la
-connexion échoue dans le config_flow (« impossible de joindre l'add-on »),
-regarde le nom réel du conteneur de l'add-on (logs Supervisor, ou
-`ha addons info crywatch_cry_detector` en SSH) et entre-le à la main dans le
-formulaire — c'est un champ libre, pas figé.
+**Résolu (2026-09-20) : le hostname deviné était faux, comme prévu.**
+`crywatch_cry_detector` seul ne fonctionne pas — Supervisor préfixe le slug
+d'un add-on en dépôt (non-officiel) avec un hash de l'URL du dépôt. Trouvé
+via `ha apps list` en SSH (le CLI Supervisor a renommé `addons` en `apps`
+sur la version de Pierre — `ha addons info ...` répond "does not exist",
+`ha apps list` donne le vrai `slug:`). Pour `https://github.com/Shrolk/
+crywatch` : **`aff0293d_crywatch_cry_detector`**, maintenant le
+`DEFAULT_HOST` dans `const.py`. Ce hash est dérivé de l'URL du dépôt (donc
+reproductible pour ce repo précis), mais différerait pour un autre fork —
+le champ reste éditable dans le formulaire, `ha apps list` est la méthode
+pour le retrouver.
 
 **Rien de tout ça n'a tourné** : ni l'add-on (pas de Supervisor accessible
 ici), ni l'intégration (pas de Home Assistant pour charger le
