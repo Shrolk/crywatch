@@ -68,6 +68,63 @@ dans l'historique git — `git log` montre les commits d'origine).
   et le MQTT s'affichent correctement, et qu'un enregistrement produit bien
   le résultat attendu dans les fichiers avant de relancer les autres services.
 
+## Pivot (2026-09-20) : add-on + intégration Home Assistant, à la place de MQTT
+
+Sur demande de Pierre : plutôt qu'un `binary_sensor` créé via MQTT discovery,
+la détection de pleurs devient une **vraie intégration Home Assistant**
+(entités natives, réglages natifs), avec le calcul (ffmpeg + YAMNet) qui
+tourne dans un **add-on Supervisor** — pas un docker-compose séparé à
+maintenir à la main. La vidéo reste hors périmètre : Pierre a déjà ses
+caméras en natif dans HA, donc `go2rtc`/`viewer`/`config-ui` de ce repo ne
+sont plus son chemin de déploiement pour la partie caméra (ils restent dans
+le repo pour la compatibilité upstream / d'autres utilisateurs de crywatch,
+mais **Pierre n'en a plus besoin**).
+
+- **`ha-addon/crywatch_cry_detector/`** : reprend `cry-detector/yamnet_detect.py`
+  mais lit l'audio **RTSP directement depuis chaque caméra** (plus besoin de
+  go2rtc comme intermédiaire), et sert un état JSON interne
+  (`GET /api/state`) au lieu de MQTT/ntfy. Réglages natifs dans l'onglet
+  **Configuration** de l'add-on (liste de caméras `name`/`rtsp_url` +
+  `cry_prob`, `sustain_samples`, etc. — mêmes réglages que documentés dans le
+  `README.md` principal, en snake_case). Aucun port publié : l'API n'est
+  joignable que depuis Home Assistant Core, via le réseau Docker interne de
+  Supervisor.
+- **`custom_components/crywatch/`** : intégration HA (config_flow +
+  `DataUpdateCoordinator` qui poll `/api/state` toutes les 5s) créant, par
+  caméra, un `binary_sensor` (« Pleurs détectés », `device_class: sound`) et
+  un `sensor` diagnostic (confiance %), groupés en un appareil HA par
+  caméra — installable via un **dépôt HACS personnalisé** pointant sur ce
+  repo (`hacs.json` à la racine).
+- **`repository.yaml`** (racine du repo) : permet d'ajouter ce repo comme
+  **dépôt d'add-ons** dans Supervisor (Paramètres → Add-ons → Boutique →
+  ⋮ → Dépôts), en plus de l'ajout HACS pour l'intégration — les deux
+  mécanismes lisent des sous-dossiers différents du même repo, pas de
+  conflit.
+
+**Hypothèse non vérifiée, à confirmer en premier** : l'intégration devine
+`crywatch_cry_detector` comme nom d'hôte interne pour joindre l'add-on
+(`const.py` → `DEFAULT_HOST`). C'est la convention Supervisor habituelle
+(hostname = slug de l'add-on sur le réseau Docker `hassio`), mais je n'ai
+aucun Home Assistant/Supervisor accessible ici pour le vérifier. Si la
+connexion échoue dans le config_flow (« impossible de joindre l'add-on »),
+regarde le nom réel du conteneur de l'add-on (logs Supervisor, ou
+`ha addons info crywatch_cry_detector` en SSH) et entre-le à la main dans le
+formulaire — c'est un champ libre, pas figé.
+
+**Rien de tout ça n'a tourné** : ni l'add-on (pas de Supervisor accessible
+ici), ni l'intégration (pas de Home Assistant pour charger le
+`custom_component` et vérifier que `config_flow`/`DataUpdateCoordinator`
+s'enregistrent sans erreur). Relu attentivement contre les patterns HA
+habituels (comparable à l'intégration Frigate : add-on séparé pour le calcul
+lourd + intégration légère qui poll son API — pas du bricolage inédit), mais
+à valider pas à pas :
+1. Add-on d'abord, seul — vérifier dans son onglet **Journal** que YAMNet
+   charge et qu'il n'y a pas d'erreur ffmpeg/RTSP.
+2. Puis l'intégration — si le config_flow échoue à se connecter, c'est
+   probablement le hostname (voir ci-dessus).
+3. Puis vérifier que les deux entités par caméra apparaissent et bougent
+   quand tu fais du bruit devant la caméra.
+
 ## Déploiement chez toi
 
 1. Vérifier le micro RTSP du C210 (`ffprobe` sur l'URL RTSP — piste audio présente ?).

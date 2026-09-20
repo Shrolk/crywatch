@@ -15,8 +15,9 @@ conditions réelles**. Considère tout comme "à valider", pas "qui marche".
    (audio inclus) via go2rtc.
 2. Un classifieur YAMNet qui distingue un vrai pleur d'un bruit fort (remplace
    le seuil dB natif de Tapo, trop de faux positifs).
-3. Quand un pleur est détecté : publication MQTT vers son Mosquitto existant,
-   avec HA MQTT discovery → `binary_sensor` auto-créé dans Home Assistant.
+3. Quand un pleur est détecté : capteurs natifs dans Home Assistant (plus de
+   MQTT — voir pivot du 2026-09-20 ci-dessous) : `binary_sensor` « Pleurs
+   détectés » + `sensor` confiance %, un couple par caméra.
 4. Une automation HA qui, sur ce binary_sensor passant à `on`, réveille un
    téléphone équipé de **Fully Kiosk Browser PLUS**, joue un bip d'alerte,
    affiche le flux caméra (son activé) pendant 1 minute, puis revient au
@@ -32,13 +33,29 @@ conditions réelles**. Considère tout comme "à valider", pas "qui marche".
   service `ntfy` commenté par défaut.
 - `examples/go2rtc.example.yaml` : adapté à une seule caméra (`simon`/`simon_hd`)
   au lieu de `cam1`/`cam2`.
-- `config-ui/` (nouveau, 2026-09-20) : UI web (port `8090`, login/mot de passe
-  obligatoires via `CONFIG_UI_USER`/`CONFIG_UI_PASSWORD`) pour éditer les
-  caméras (`go2rtc.yaml` + `CAMS` dans `.env` en un seul geste) et le MQTT
-  (`.env`) sans shell. N'applique rien elle-même — indique la commande
-  `docker compose up -d` / `restart go2rtc` à lancer après coup. **Jamais
-  exécutée** (pas de Python/Docker dans l'environnement où elle a été écrite)
-  — à tester en premier avec des fichiers de test avant de lui faire confiance.
+- `config-ui/` (2026-09-20, **superseded pour Pierre**, voir pivot ci-dessous) :
+  UI web pour éditer `go2rtc.yaml`/`.env` sans shell. Gardée dans le repo pour
+  compatibilité upstream, mais Pierre n'a plus besoin du couple
+  go2rtc+cry-detector Docker pour son propre déploiement.
+- **Pivot (2026-09-20) : add-on Home Assistant + intégration native**, à la
+  place de MQTT et du docker-compose cry-detector/config-ui, sur demande
+  explicite de Pierre (« tout depuis HA, pas de docker séparé », capteurs
+  natifs plutôt que MQTT) :
+  - `ha-addon/crywatch_cry_detector/` : add-on Supervisor — ffmpeg+YAMNet,
+    lit le RTSP **directement depuis chaque caméra** (plus de dépendance à
+    go2rtc), réglages natifs dans l'onglet Configuration de l'add-on, sert un
+    état JSON interne (pas de port publié sur le LAN).
+  - `custom_components/crywatch/` : intégration HA (config_flow +
+    coordinator qui poll l'add-on) — un `binary_sensor` + un `sensor`
+    diagnostic par caméra, groupés en appareil HA. Distribuable via un dépôt
+    HACS personnalisé (`hacs.json` à la racine).
+  - `repository.yaml` (racine) : permet d'ajouter ce repo comme dépôt
+    d'add-ons Supervisor, en parallèle du dépôt HACS pour l'intégration.
+  - **Jamais exécuté** (pas de Home Assistant/Supervisor accessible ici) —
+    l'hypothèse la plus fragile est le hostname interne deviné pour joindre
+    l'add-on (`DEFAULT_HOST = "crywatch_cry_detector"` dans
+    `custom_components/crywatch/const.py`) : à vérifier en premier si le
+    config_flow échoue à se connecter. Détail complet dans `FORK_NOTES.md`.
 - Détail complet, y compris les limites connues, dans `FORK_NOTES.md`.
 
 ## Ce qui manque pour que ça tourne (à faire avec/pour Pierre)

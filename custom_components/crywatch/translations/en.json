@@ -1,0 +1,19 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to the Crywatch add-on",
+        "data": {
+          "host": "Host (add-on's name on the internal network)",
+          "port": "Port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not reach the add-on at that address — check it's running, and the host/port"
+    },
+    "abort": {
+      "already_configured": "Already configured"
+    }
+  }
+}
