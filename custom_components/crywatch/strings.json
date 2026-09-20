@@ -7,6 +7,13 @@
           "host": "Hôte (nom de l'add-on sur le réseau interne)",
           "port": "Port"
         }
+      },
+      "cameras": {
+        "title": "Choisir les caméras",
+        "description": "Sélectionne les entités caméra HA à surveiller — leur flux RTSP est récupéré automatiquement, rien à saisir à la main.",
+        "data": {
+          "cameras": "Caméras"
+        }
       }
     },
     "error": {
@@ -14,6 +21,16 @@
     },
     "abort": {
       "already_configured": "Déjà configuré"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Caméras surveillées",
+        "data": {
+          "cameras": "Caméras"
+        }
+      }
     }
   }
 }

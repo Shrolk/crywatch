@@ -2,6 +2,8 @@
 
 DOMAIN = "crywatch"
 
+CONF_CAMERAS = "cameras"
+
 # Guessed Supervisor-internal hostname for the companion add-on
 # (ha-addon/crywatch_cry_detector, slug "crywatch_cry_detector"). Editable in
 # the config flow — NOT verified against a real Supervisor install (this was

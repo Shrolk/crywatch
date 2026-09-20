@@ -7,6 +7,13 @@
           "host": "Host (add-on's name on the internal network)",
           "port": "Port"
         }
+      },
+      "cameras": {
+        "title": "Pick cameras",
+        "description": "Select the HA camera entities to monitor — their RTSP stream is resolved automatically, nothing to type in by hand.",
+        "data": {
+          "cameras": "Cameras"
+        }
       }
     },
     "error": {
@@ -14,6 +21,16 @@
     },
     "abort": {
       "already_configured": "Already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Monitored cameras",
+        "data": {
+          "cameras": "Cameras"
+        }
+      }
     }
   }
 }

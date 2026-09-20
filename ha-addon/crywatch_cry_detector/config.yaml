@@ -2,9 +2,11 @@ name: Crywatch Cry Detector
 version: "1.0.0"
 slug: crywatch_cry_detector
 description: >-
-  Détecteur de pleurs bébé (YAMNet, CPU) sur flux audio RTSP. N'expose rien
-  sur le LAN : sert un petit état JSON en interne pour l'intégration
-  "Crywatch" (capteurs natifs, pas de MQTT).
+  Détecteur de pleurs bébé (YAMNet, CPU) sur flux audio RTSP. Les caméras ne
+  se configurent pas ici : c'est l'intégration "Crywatch" qui les fournit
+  (choisies parmi tes entités caméra HA existantes). N'expose rien sur le
+  LAN : sert un petit état JSON en interne pour cette intégration (capteurs
+  natifs, pas de MQTT).
 url: https://github.com/Shrolk/crywatch
 arch:
   - amd64
@@ -12,9 +14,6 @@ startup: application
 boot: auto
 init: false
 options:
-  cameras:
-    - name: "Chambre Simon"
-      rtsp_url: "rtsp://user:password@192.168.1.50:554/stream2"
   cry_prob: 0.4
   sustain_samples: 2
   cooldown: 60
@@ -23,9 +22,6 @@ options:
   state_timeout: 60
   log_scores: false
 schema:
-  cameras:
-    - name: str
-      rtsp_url: url
   cry_prob: "float(0,1)"
   sustain_samples: "int(1,10)"
   cooldown: "int(0,3600)"

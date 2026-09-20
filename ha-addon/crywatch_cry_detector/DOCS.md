@@ -2,9 +2,12 @@
 
 ## Configuration
 
+Les caméras ne sont **pas** dans cette liste : elles arrivent via `POST
+/api/cameras`, envoyé par l'intégration Crywatch à chaque démarrage/rechargement
+(voir son README). Cet add-on ne fait que la détection.
+
 | Option | Défaut | Description |
 |---|---|---|
-| `cameras` | — | Liste des caméras : `name` (libellé) + `rtsp_url` (URL RTSP complète, avec identifiants). Au moins une requise. |
 | `cry_prob` | `0.4` | Probabilité de pleur (0-1) à partir de laquelle un échantillon compte comme "pleur". Monte si trop de faux positifs, baisse s'il en rate. |
 | `sustain_samples` | `2` | Échantillons consécutifs au-dessus du seuil avant de déclencher. |
 | `cooldown` | `60` | Secondes minimum entre deux déclenchements. |
@@ -13,13 +16,11 @@
 | `state_timeout` | `60` | Secondes sans nouveau pleur avant que le capteur "pleurs détectés" repasse à OFF. |
 | `log_scores` | `false` | `true` = affiche le score de chaque échantillon dans les logs de l'add-on (utile pour calibrer `cry_prob`, à activer temporairement). |
 
-## Après une modification de `cameras`
+## Ajouter/retirer une caméra
 
-L'add-on doit redémarrer pour relire `cameras` (Supervisor le fait
-automatiquement à la sauvegarde de la Configuration). Ensuite, dans Home
-Assistant, recharge l'intégration **Crywatch** (Paramètres → Appareils et
-services → Crywatch → ⋮ → Recharger) pour que les nouvelles entités
-apparaissent.
+Ça se fait côté intégration (Paramètres → Appareils et services → Crywatch →
+⋮ → Configurer), pas ici. L'add-on applique le changement à chaud (pas de
+redémarrage nécessaire) dès qu'il reçoit le `POST /api/cameras` suivant.
 
 ## Vérifier que ça tourne
 

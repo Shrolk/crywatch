@@ -101,6 +101,28 @@ mais **Pierre n'en a plus besoin**).
   mécanismes lisent des sous-dossiers différents du même repo, pas de
   conflit.
 
+**Mise à jour (même jour) : plus de champ RTSP à saisir.** L'intégration
+sélectionne des **entités caméra HA existantes** (`EntitySelector(domain=
+"camera")`, dans le config_flow puis dans son Options flow pour en changer
+plus tard) et résout elle-même leur source RTSP via
+`homeassistant.components.camera.async_get_stream_source(hass, entity_id)` —
+l'API HA standard pour ça, censée marcher quel que soit le type d'intégration
+caméra sous-jacente (Generic/ONVIF/Tapo). Elle pousse ensuite la liste
+(`{key: entity_id, name, rtsp_url}`) à l'add-on via `POST /api/cameras` — à
+la création de l'intégration, et à chaque `Recharger`/changement d'options.
+L'add-on démarre maintenant **sans caméra du tout** et applique la liste
+reçue à chaud (démarre/arrête les threads concernés, sans redémarrer). Donc
+`ha-addon/.../config.yaml` n'a plus d'option `cameras`.
+
+Nouvelle inconnue, en plus du hostname (voir plus bas) : je n'ai jamais vu
+`async_get_stream_source` tourner en vrai contre une caméra Tapo (ou
+n'importe quelle caméra) — si elle renvoie `None` pour ton entité, l'add-on
+recevra une liste vide et le log de l'intégration dira "no RTSP stream
+source (unsupported camera platform?)". Si ça arrive, dis-moi comment ta
+caméra Simon est intégrée dans HA (Generic Camera / ONVIF / Tapo Control /
+autre) — ça se contourne (certaines intégrations exposent le flux
+différemment) mais je ne peux pas deviner laquelle sans le savoir.
+
 **Hypothèse non vérifiée, à confirmer en premier** : l'intégration devine
 `crywatch_cry_detector` comme nom d'hôte interne pour joindre l'add-on
 (`const.py` → `DEFAULT_HOST`). C'est la convention Supervisor habituelle

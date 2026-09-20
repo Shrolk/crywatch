@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """Crywatch cry-detector — Home Assistant Add-on.
 
-Runs Google's YAMNet on short RTSP audio bursts, one thread per configured
-camera (read from the add-on's options, /data/options.json — set from the
-Configuration tab, no separate web UI), and serves the current state over a
-tiny local JSON API for the companion "crywatch" HA integration
-(custom_components/crywatch) to poll. No MQTT, no ntfy — this replaces both
-with native HA entities via that integration.
+Runs Google's YAMNet on short RTSP audio bursts, one thread per camera, and
+serves the current state over a tiny local JSON API for the companion
+"crywatch" HA integration (custom_components/crywatch) to poll. No MQTT, no
+ntfy — this replaces both with native HA entities via that integration.
+
+Cameras are NOT configured here: this add-on starts with zero cameras and
+waits for the integration to POST /api/cameras with the RTSP source of
+whichever HA `camera.*` entities the user picked (resolved from HA's own
+camera component, so no RTSP URL/credentials are typed twice). Only the
+detection tuning (cry_prob, sustain, ...) lives in this add-on's own
+Configuration tab.
 
 Not reachable from the LAN by default: this add-on declares no `ports` in
 config.yaml, so http://crywatch_cry_detector:8091 only resolves on
@@ -16,7 +21,6 @@ import csv
 import json
 import math
 import os
-import re
 import subprocess
 import threading
 import time
@@ -32,7 +36,6 @@ SR = 16000
 with open(OPTIONS_PATH) as f:
     OPTIONS = json.load(f)
 
-CAMERAS = OPTIONS.get("cameras") or []
 CRY_PROB = float(OPTIONS.get("cry_prob", 0.4))
 SUSTAIN = int(OPTIONS.get("sustain_samples", 2))
 COOLDOWN = float(OPTIONS.get("cooldown", 60))
@@ -40,15 +43,6 @@ SAMPLE_SEC = str(OPTIONS.get("sample_sec", 2.0))
 RMS_GATE = float(OPTIONS.get("rms_gate_db", -60))
 STATE_TIMEOUT = float(OPTIONS.get("state_timeout", 60))
 LOG = bool(OPTIONS.get("log_scores", False))
-
-if not CAMERAS:
-    raise SystemExit("no cameras configured — add at least one in the add-on's "
-                      "Configuration tab before starting")
-
-
-def slug(label):
-    return re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_")
-
 
 import tensorflow_hub as hub  # noqa: E402
 
@@ -62,14 +56,24 @@ _infer_lock = threading.Lock()   # YAMNet inference is serialized across cam thr
 print(f"[yamnet] ready. cry classes={CRY_IDX} prob>={CRY_PROB} sustain={SUSTAIN} "
       f"cooldown={COOLDOWN}s sample={SAMPLE_SEC}s gate={RMS_GATE}dB", flush=True)
 
-_state = {}       # slug -> {label, crying, score_pct, top, db, last_update}
+_state = {}       # key (HA entity_id) -> {label, crying, score_pct, top, db, last_update}
 _state_lock = threading.Lock()
-_off_timers = {}  # slug -> pending auto-off Timer, so a new cry can cancel/reset it
+_off_timers = {}  # key -> pending auto-off Timer, so a new cry can cancel/reset it
+_monitors = {}    # key -> {"thread": Thread, "stop": Event, "url": str}
+_monitors_lock = threading.Lock()
 
 
 def set_state(key, **fields):
     with _state_lock:
         _state.setdefault(key, {}).update(fields, last_update=time.time())
+
+
+def drop_state(key):
+    with _state_lock:
+        _state.pop(key, None)
+    old = _off_timers.pop(key, None)
+    if old:
+        old.cancel()
 
 
 def sample_audio(url):
@@ -107,16 +111,15 @@ def clear_cry(key):
     set_state(key, crying=False, score_pct=0)
 
 
-def monitor(cam):
-    label = cam.get("name") or cam["rtsp_url"]
-    key = slug(label)
-    url = cam["rtsp_url"]
+def monitor(key, label, url, stop_event):
     streak = 0
     last_alert = 0.0
     set_state(key, label=label, crying=False, score_pct=0, top="(starting)", db=None)
-    while True:
+    while not stop_event.is_set():
         wav = sample_audio(url)
         now = time.time()
+        if stop_event.is_set():
+            break
         if wav is None:
             time.sleep(2)
             streak = 0
@@ -146,6 +149,29 @@ def monitor(cam):
             set_state(key, top=top, db=db)
 
 
+def apply_cameras(cameras):
+    """Reconcile the running monitor threads against a fresh camera list
+    (key/name/rtsp_url dicts, as pushed by the crywatch integration)."""
+    wanted = {c["key"]: c for c in cameras if c.get("key") and c.get("rtsp_url")}
+    with _monitors_lock:
+        for key in list(_monitors):
+            if key not in wanted or _monitors[key]["url"] != wanted[key]["rtsp_url"]:
+                _monitors[key]["stop"].set()
+                del _monitors[key]
+                if key not in wanted:
+                    drop_state(key)
+        for key, cam in wanted.items():
+            if key in _monitors:
+                continue
+            stop_event = threading.Event()
+            t = threading.Thread(
+                target=monitor, args=(key, cam.get("name", key), cam["rtsp_url"], stop_event),
+                daemon=True)
+            _monitors[key] = {"thread": t, "stop": stop_event, "url": cam["rtsp_url"]}
+            t.start()
+    print(f"[cameras] now watching {len(wanted)} camera(s): {list(wanted)}", flush=True)
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if urlparse(self.path).path in ("/api/state", "/"):
@@ -160,12 +186,30 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(404)
         self.end_headers()
 
+    def do_POST(self):
+        if urlparse(self.path).path == "/api/cameras":
+            n = int(self.headers.get("Content-Length", 0))
+            try:
+                payload = json.loads(self.rfile.read(n) or b"{}")
+                apply_cameras(payload.get("cameras", []))
+            except Exception as e:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(str(e).encode())
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"ok": true}')
+            return
+        self.send_response(404)
+        self.end_headers()
+
     def log_message(self, *a):
         pass
 
 
 if __name__ == "__main__":
-    for cam in CAMERAS:
-        threading.Thread(target=monitor, args=(cam,), daemon=True).start()
-    print(f"[api] serving state on :{PORT}/api/state", flush=True)
+    print(f"[api] serving state on :{PORT} — waiting for the crywatch integration "
+          f"to POST /api/cameras", flush=True)
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
