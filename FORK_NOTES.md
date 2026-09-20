@@ -147,6 +147,30 @@ lourd + intégration légère qui poll son API — pas du bricolage inédit), ma
 3. Puis vérifier que les deux entités par caméra apparaissent et bougent
    quand tu fais du bruit devant la caméra.
 
+## Bug de démarrage résolu chez Pierre (2026-09-20) : `ModuleNotFoundError: pkg_resources`
+
+Premier vrai test de l'add-on chez Pierre : crash immédiat au chargement de
+`tensorflow_hub` (`from pkg_resources import parse_version`). Trois tentatives
+de fix ont échoué **à l'identique** malgré des changements de contenu du
+Dockerfile (ajout de `setuptools` à `requirements.txt`, puis un `RUN pip
+install --upgrade pip setuptools wheel` dédié) et même après désinstallation
+complète de l'add-on + suppression/réajout du dépôt + réinstallation à
+froid — ce qui écarte un problème de cache Docker/Supervisor.
+
+Cause probable : `python:3.12-slim` n'embarque plus `setuptools` par défaut
+dans son venv/ensurepip (contrairement à 3.11 et avant), et `tensorflow_hub`
+importe encore `pkg_resources` (fourni par `setuptools`) au chargement.
+Pourquoi l'installer explicitement n'a rien changé reste **non expliqué** —
+possible spécificité de la façon dont Supervisor construit l'image pour un
+add-on en dépôt (à creuser si ça revient). Fix appliqué : basculer sur
+`python:3.11-slim`, qui embarque encore `setuptools`, exactement comme
+`cry-detector/Dockerfile` (upstream) qui n'a jamais eu ce problème. Version
+`1.0.3`. Si le crash persiste malgré ce changement radical de version
+Python, ce sera le signe que le rebuild ne se produit vraiment pas côté
+Supervisor pour une raison qui reste à identifier (peut-être propre à
+l'installation HA de Pierre) — pas la peine de continuer à bidouiller le
+Dockerfile dans ce cas, il faudra regarder le log de build brut en détail.
+
 ## Déploiement chez toi
 
 1. Vérifier le micro RTSP du C210 (`ffprobe` sur l'URL RTSP — piste audio présente ?).
