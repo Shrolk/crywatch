@@ -123,17 +123,20 @@ caméra Simon est intégrée dans HA (Generic Camera / ONVIF / Tapo Control /
 autre) — ça se contourne (certaines intégrations exposent le flux
 différemment) mais je ne peux pas deviner laquelle sans le savoir.
 
-**Résolu (2026-09-20) : le hostname deviné était faux, comme prévu.**
+**Résolu (2026-09-20) : le hostname deviné était faux, en deux temps.**
 `crywatch_cry_detector` seul ne fonctionne pas — Supervisor préfixe le slug
 d'un add-on en dépôt (non-officiel) avec un hash de l'URL du dépôt. Trouvé
 via `ha apps list` en SSH (le CLI Supervisor a renommé `addons` en `apps`
 sur la version de Pierre — `ha addons info ...` répond "does not exist",
-`ha apps list` donne le vrai `slug:`). Pour `https://github.com/Shrolk/
-crywatch` : **`aff0293d_crywatch_cry_detector`**, maintenant le
-`DEFAULT_HOST` dans `const.py`. Ce hash est dérivé de l'URL du dépôt (donc
-reproductible pour ce repo précis), mais différerait pour un autre fork —
-le champ reste éditable dans le formulaire, `ha apps list` est la méthode
-pour le retrouver.
+`ha apps list` donne le `slug:`) : `aff0293d_crywatch_cry_detector`. Mais
+même ce slug complet ne se connectait toujours pas — le **hostname DNS
+réel** n'est pas identique au slug : Supervisor remplace les underscores
+par des tirets pour le hostname. Confirmé via `ha apps info
+aff0293d_crywatch_cry_detector` → `hostname: aff0293d-crywatch-cry-detector`
+(tirets). C'est cette valeur (avec tirets) qui est maintenant le
+`DEFAULT_HOST` dans `const.py`. Pour un autre fork/URL de dépôt, le hash
+différera — méthode pour le retrouver : `ha apps list` (slug) puis
+`ha apps info <slug>` (`hostname:`, avec tirets).
 
 **Rien de tout ça n'a tourné** : ni l'add-on (pas de Supervisor accessible
 ici), ni l'intégration (pas de Home Assistant pour charger le
