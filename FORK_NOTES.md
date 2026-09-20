@@ -165,11 +165,14 @@ possible spécificité de la façon dont Supervisor construit l'image pour un
 add-on en dépôt (à creuser si ça revient). Fix appliqué : basculer sur
 `python:3.11-slim`, qui embarque encore `setuptools`, exactement comme
 `cry-detector/Dockerfile` (upstream) qui n'a jamais eu ce problème. Version
-`1.0.3`. Si le crash persiste malgré ce changement radical de version
-Python, ce sera le signe que le rebuild ne se produit vraiment pas côté
-Supervisor pour une raison qui reste à identifier (peut-être propre à
-l'installation HA de Pierre) — pas la peine de continuer à bidouiller le
-Dockerfile dans ce cas, il faudra regarder le log de build brut en détail.
+`1.0.3`. **Confirmé résolu chez Pierre** : `[yamnet] ready.` et l'API sert
+bien `:8091` en attente du premier `POST /api/cameras`. Le rebuild se
+faisait donc correctement à chaque tentative précédente (le cache n'était
+pas en cause) — pourquoi l'ajout explicite de `setuptools` sur
+`python:3.12-slim` n'a pas suffi reste non expliqué, mais sans intérêt
+pratique maintenant que `python:3.11-slim` fonctionne. À garder en tête si
+`cry-detector/` (legacy, upstream) est retouché un jour : rester sur
+`3.11-slim`, pas `3.12`.
 
 ## Déploiement chez toi
 
