@@ -32,6 +32,13 @@ conditions réelles**. Considère tout comme "à valider", pas "qui marche".
   service `ntfy` commenté par défaut.
 - `examples/go2rtc.example.yaml` : adapté à une seule caméra (`simon`/`simon_hd`)
   au lieu de `cam1`/`cam2`.
+- `config-ui/` (nouveau, 2026-09-20) : UI web (port `8090`, login/mot de passe
+  obligatoires via `CONFIG_UI_USER`/`CONFIG_UI_PASSWORD`) pour éditer les
+  caméras (`go2rtc.yaml` + `CAMS` dans `.env` en un seul geste) et le MQTT
+  (`.env`) sans shell. N'applique rien elle-même — indique la commande
+  `docker compose up -d` / `restart go2rtc` à lancer après coup. **Jamais
+  exécutée** (pas de Python/Docker dans l'environnement où elle a été écrite)
+  — à tester en premier avec des fichiers de test avant de lui faire confiance.
 - Détail complet, y compris les limites connues, dans `FORK_NOTES.md`.
 
 ## Ce qui manque pour que ça tourne (à faire avec/pour Pierre)

@@ -63,6 +63,28 @@ services:
     depends_on:
       - go2rtc
 
+  # ---- FORK: petite UI web pour éditer les flux caméra (go2rtc.yaml) et le
+  #      MQTT (.env) sans se connecter en shell. N'applique rien elle-même —
+  #      relancer `docker compose up -d` (et `restart go2rtc` pour les flux)
+  #      après avoir enregistré. Protégée par login/mot de passe (obligatoire,
+  #      pas de valeur par défaut : elle lit/écrit des identifiants RTSP et
+  #      MQTT_PASSWORD). ----
+  config-ui:
+    build: ./config-ui
+    image: crywatch-config-ui
+    container_name: crywatch-config-ui
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      - CONFIG_UI_USER=${CONFIG_UI_USER:?set CONFIG_UI_USER in .env}
+      - CONFIG_UI_PASSWORD=${CONFIG_UI_PASSWORD:?set CONFIG_UI_PASSWORD in .env}
+    volumes:
+      - ./go2rtc.yaml:/data/go2rtc.yaml
+      - ./.env:/data/.env
+      - ./examples/go2rtc.example.yaml:/data/go2rtc.example.yaml:ro
+      - ./.env.example:/data/.env.example:ro
+
   # ---- FORK: service ntfy upstream désactivé par défaut — Pierre pilote tout via
   #      MQTT + Home Assistant. Décommenter pour réactiver un push mobile hors LAN
   #      (et remettre "- ntfy" dans depends_on ci-dessus). ----

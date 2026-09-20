@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>crywatch — config</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 15px/1.4 system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.3rem; }
+  h2 { font-size: 1.05rem; margin-top: 2.5rem; border-bottom: 1px solid #8884; padding-bottom: .3rem; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+  th { text-align: left; font-size: .8rem; opacity: .7; font-weight: 600; }
+  td { padding: .25rem .3rem .25rem 0; vertical-align: top; }
+  input[type=text], input[type=number], input[type=password] {
+    width: 100%; box-sizing: border-box; padding: .35rem; font: inherit;
+  }
+  input[type=checkbox] { width: auto; }
+  .row-actions button { padding: .35rem .5rem; }
+  .hint { font-size: .8rem; opacity: .65; margin: .2rem 0 .6rem; }
+  .actions { display: flex; gap: .5rem; align-items: center; margin-top: 1rem; }
+  button.primary { background: #2563eb; color: #fff; border: none; padding: .5rem 1rem; border-radius: 4px; cursor: pointer; }
+  button.secondary { background: transparent; border: 1px solid #8888; padding: .5rem 1rem; border-radius: 4px; cursor: pointer; }
+  .banner { padding: .7rem 1rem; border-radius: 6px; margin: 1rem 0; font-size: .9rem; white-space: pre-line; }
+  .banner.ok { background: #16a34a22; border: 1px solid #16a34a55; }
+  .banner.err { background: #dc262622; border: 1px solid #dc262655; }
+  .viewer-link { font-size: .85rem; margin-top: .5rem; }
+  code { background: #8882; padding: .1rem .3rem; border-radius: 3px; }
+</style>
+</head>
+<body>
+<h1>crywatch — caméras &amp; MQTT</h1>
+<p class="hint">Écrit directement dans <code>go2rtc.yaml</code> et <code>.env</code>. N'applique rien tout(e) seul(e) —
+après chaque enregistrement, relance la stack toi-même.</p>
+
+<h2>Caméras</h2>
+<table id="cam-table">
+  <thead><tr><th>nom</th><th>libellé</th><th>RTSP (sous-flux / grille)</th><th>RTSP (HD / plein écran)</th><th></th></tr></thead>
+  <tbody></tbody>
+</table>
+<div class="actions">
+  <button class="secondary" id="add-cam" type="button">+ ajouter une caméra</button>
+  <button class="primary" id="save-cams" type="button">Enregistrer les caméras</button>
+</div>
+<p class="hint">Nom : minuscules/chiffres/_ (doit matcher un flux go2rtc). RTSP HD optionnel — sans lui,
+le tap-to-expand du viewer restera sur le sous-flux.</p>
+<div id="cam-banner"></div>
+<div class="viewer-link" id="viewer-link"></div>
+
+<h2>MQTT (Home Assistant)</h2>
+<table>
+  <tr><td>Broker (host)</td><td><input id="mqtt-host" type="text" placeholder="192.168.1.x"></td></tr>
+  <tr><td>Port</td><td><input id="mqtt-port" type="number" value="1883"></td></tr>
+  <tr><td>Utilisateur</td><td><input id="mqtt-user" type="text"></td></tr>
+  <tr><td>Mot de passe</td><td><input id="mqtt-password" type="password" placeholder="laisser vide = inchangé"></td></tr>
+  <tr><td>Topic base</td><td><input id="mqtt-topic" type="text" value="crywatch"></td></tr>
+  <tr><td>Discovery HA</td><td><input id="mqtt-discovery" type="checkbox" checked></td></tr>
+  <tr><td>Auto-OFF (s)</td><td><input id="mqtt-timeout" type="number" value="60"></td></tr>
+</table>
+<div class="actions">
+  <button class="primary" id="save-mqtt" type="button">Enregistrer MQTT</button>
+</div>
+<div id="mqtt-banner"></div>
+
+<script>
+const camBody = document.querySelector('#cam-table tbody');
+
+function camRow(cam) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input class="f-name" type="text" value="${esc(cam.name||'')}"></td>
+    <td><input class="f-label" type="text" value="${esc(cam.label||'')}"></td>
+    <td><input class="f-sub" type="text" value="${esc(cam.sub_url||'')}" placeholder="rtsp://user:pass@ip:554/stream2"></td>
+    <td><input class="f-hd" type="text" value="${esc(cam.hd_url||'')}" placeholder="rtsp://user:pass@ip:554/stream1"></td>
+    <td class="row-actions"><button type="button" class="secondary del">✕</button></td>`;
+  tr.querySelector('.del').onclick = () => tr.remove();
+  return tr;
+}
+
+function esc(s) { return String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+
+function readCameras() {
+  return [...camBody.querySelectorAll('tr')].map(tr => ({
+    name: tr.querySelector('.f-name').value.trim(),
+    label: tr.querySelector('.f-label').value.trim(),
+    sub_url: tr.querySelector('.f-sub').value.trim(),
+    hd_url: tr.querySelector('.f-hd').value.trim(),
+  }));
+}
+
+function banner(el, ok, msg) {
+  el.innerHTML = `<div class="banner ${ok ? 'ok' : 'err'}">${esc(msg)}</div>`;
+}
+
+function updateViewerLink(cameras) {
+  const el = document.getElementById('viewer-link');
+  if (!cameras.length) { el.innerHTML = ''; return; }
+  const cams = cameras.map(c => c.name).join(',');
+  const labels = cameras.map(c => c.label).join(',');
+  const url = `/multi.html?cams=${encodeURIComponent(cams)}&labels=${encodeURIComponent(labels)}`;
+  el.innerHTML = `Viewer (une fois le port 1985 servi) : <code>${esc(url)}</code>`;
+}
+
+async function load() {
+  const res = await fetch('/api/config');
+  const cfg = await res.json();
+  camBody.innerHTML = '';
+  cfg.cameras.forEach(c => camBody.appendChild(camRow(c)));
+  updateViewerLink(cfg.cameras);
+
+  document.getElementById('mqtt-host').value = cfg.mqtt.host;
+  document.getElementById('mqtt-port').value = cfg.mqtt.port;
+  document.getElementById('mqtt-user').value = cfg.mqtt.user;
+  document.getElementById('mqtt-password').placeholder = cfg.mqtt.has_password
+    ? 'laisser vide = inchangé (déjà défini)' : 'laisser vide = pas de mot de passe';
+  document.getElementById('mqtt-topic').value = cfg.mqtt.topic_base;
+  document.getElementById('mqtt-discovery').checked = cfg.mqtt.discovery;
+  document.getElementById('mqtt-timeout').value = cfg.mqtt.state_timeout;
+}
+
+document.getElementById('add-cam').onclick = () => camBody.appendChild(camRow({}));
+
+document.getElementById('save-cams').onclick = async () => {
+  const cameras = readCameras();
+  const res = await fetch('/api/cameras', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({cameras}),
+  });
+  const data = await res.json();
+  const b = document.getElementById('cam-banner');
+  if (res.ok) {
+    banner(b, true, "Enregistré dans go2rtc.yaml et .env (CAMS).\nPour appliquer : docker compose up -d && docker compose restart go2rtc");
+    updateViewerLink(cameras);
+  } else {
+    banner(b, false, data.error || 'erreur');
+  }
+};
+
+document.getElementById('save-mqtt').onclick = async () => {
+  const mqtt = {
+    host: document.getElementById('mqtt-host').value.trim(),
+    port: document.getElementById('mqtt-port').value,
+    user: document.getElementById('mqtt-user').value.trim(),
+    password: document.getElementById('mqtt-password').value,
+    topic_base: document.getElementById('mqtt-topic').value.trim(),
+    discovery: document.getElementById('mqtt-discovery').checked,
+    state_timeout: document.getElementById('mqtt-timeout').value,
+  };
+  const res = await fetch('/api/mqtt', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({mqtt}),
+  });
+  const data = await res.json();
+  const b = document.getElementById('mqtt-banner');
+  if (res.ok) {
+    banner(b, true, "Enregistré dans .env.\nPour appliquer : docker compose up -d");
+    document.getElementById('mqtt-password').value = '';
+    load();
+  } else {
+    banner(b, false, data.error || 'erreur');
+  }
+};
+
+load();
+</script>
+</body>
+</html>

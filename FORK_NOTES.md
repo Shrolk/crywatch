@@ -19,6 +19,26 @@ dans l'historique git — `git log` montre les commits d'origine).
 - **`examples/go2rtc.example.yaml`** : adapté à une seule caméra (`simon` /
   `simon_hd`) au lieu de `cam1`/`cam2`, avec rappel de vérifier le micro RTSP côté
   app Tapo avant de débugger quoi que ce soit côté go2rtc.
+- **`config-ui/`** (nouveau service Docker, port `8090`) : petite UI web pour
+  ajouter/éditer des caméras (écrit `go2rtc.yaml` + `CAMS` dans `.env` en même
+  temps, pour ne plus avoir à synchroniser les deux à la main) et éditer les
+  réglages MQTT (`.env`). Protégée par login/mot de passe HTTP Basic obligatoire
+  (`CONFIG_UI_USER`/`CONFIG_UI_PASSWORD`, pas de défaut — le service refuse de
+  démarrer sans, `docker compose up` échoue aussi sans ces deux variables).
+  **N'applique rien toute seule** : après un enregistrement, il faut relancer
+  `docker compose up -d` (reprend les nouvelles valeurs `.env`, dont MQTT) puis
+  `docker compose restart go2rtc` (relit `go2rtc.yaml` pour les caméras) —
+  l'UI affiche la commande exacte après chaque sauvegarde.
+  - Limite connue : l'UI réécrit entièrement la section `streams:` de
+    `go2rtc.yaml` avec `ruamel.yaml` (les commentaires globaux du fichier —
+    `api:`/`rtsp:`/`webrtc:` — sont préservés, mais les commentaires
+    spécifiques à chaque flux caméra, comme dans l'exemple fourni, seront
+    perdus dès le premier enregistrement).
+  - Autre limite : elle ne touche pas les valeurs par défaut codées dans
+    `viewer/multi.html` (`cams=cam1,cam2` si aucun paramètre d'URL) — sans
+    `?cams=...&labels=...` dans l'URL, le viewer retombe sur ces valeurs
+    d'origine. L'UI affiche l'URL `?cams=...&labels=...` à jour après chaque
+    sauvegarde de caméra, mais ne modifie pas la page du viewer elle-même.
 
 ## Ce que je n'ai PAS fait
 
@@ -39,6 +59,14 @@ dans l'historique git — `git log` montre les commits d'origine).
   logique est relue et le fichier compile (`py_compile` OK), mais le comportement
   runtime (connexion MQTT, retained messages, timing de l'auto-OFF) est à valider chez
   toi avec `CRY_LOG=1` avant de brancher l'automation HA dessus.
+  Idem pour `config-ui/` : relu attentivement (logique de lecture/écriture
+  `go2rtc.yaml`/`.env`, auth Basic, validation) mais **jamais exécuté** — je
+  n'ai ni Python ni Docker dans cet environnement pour le lancer réellement.
+  À tester chez toi en premier avec des fichiers de test avant de lui faire
+  confiance sur ton vrai `go2rtc.yaml` : `docker compose up -d --build
+  config-ui` puis vérifier que la page s'ouvre sur `:8090`, que les caméras
+  et le MQTT s'affichent correctement, et qu'un enregistrement produit bien
+  le résultat attendu dans les fichiers avant de relancer les autres services.
 
 ## Déploiement chez toi
 
