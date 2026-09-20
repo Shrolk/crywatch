@@ -1,10 +1,13 @@
-# One-command stack: go2rtc (streaming hub) + viewer + cry detector + ntfy (push).
+# One-command stack: go2rtc (streaming hub) + viewer + cry detector.
+# FORK (Pierre): notifications via MQTT -> Home Assistant (Mosquitto existant),
+# le service ntfy upstream est désactivé par défaut (voir plus bas pour le
+# réactiver si tu veux aussi un push mobile hors LAN).
 #
 # Quick start:
 #   1. cp examples/go2rtc.example.yaml go2rtc.yaml   # <- add your cameras here
-#   2. cp .env.example .env                          # <- set your ntfy topic, cams, tuning
+#   2. cp .env.example .env                          # <- set MQTT_HOST, CAMS, tuning
 #   3. docker compose up -d --build
-#   Then open  http://<server-ip>:1985/multi.html?cams=cam1,cam2&labels=Nursery,Bedroom
+#   Then open  http://<server-ip>:1985/multi.html?cams=simon&labels=Chambre+Simon
 #
 # NOTE: go2rtc and the detector use host networking — go2rtc needs it for WebRTC,
 # and the detector reaches go2rtc's RTSP on localhost. This is the normal setup on a
@@ -37,34 +40,42 @@ services:
     image: baby-cry-detector
     container_name: baby-cry-detector
     restart: unless-stopped
-    network_mode: host                       # reach go2rtc RTSP + ntfy on localhost
+    network_mode: host                       # reach go2rtc RTSP + Mosquitto on the LAN
     environment:
       - PYTHONUTF8=1
-      # These read from .env if present, otherwise fall back to sane localhost defaults.
-      - NTFY_URL=${NTFY_URL:-http://localhost:8095/baby-cry}
+      # These read from .env if present, otherwise fall back to sane defaults.
+      - NTFY_URL=${NTFY_URL:-}
       - CRY_CLICK_URL=${CRY_CLICK_URL:-http://localhost:1985/multi.html}
       - GO2RTC_RTSP=${GO2RTC_RTSP:-rtsp://localhost:8554}
-      - CAMS=${CAMS:-cam1=Room 1,cam2=Room 2}
+      - CAMS=${CAMS:-simon=Chambre Simon}
       - CRY_PROB=${CRY_PROB:-0.4}
       - CRY_SUSTAIN_SAMPLES=${CRY_SUSTAIN_SAMPLES:-2}
       - CRY_COOLDOWN=${CRY_COOLDOWN:-60}
       - CRY_LOG=${CRY_LOG:-1}
+      # ---- FORK: MQTT vers le Mosquitto existant de Pierre (hors de ce compose) ----
+      - MQTT_HOST=${MQTT_HOST:-}
+      - MQTT_PORT=${MQTT_PORT:-1883}
+      - MQTT_USER=${MQTT_USER:-}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-}
+      - MQTT_TOPIC_BASE=${MQTT_TOPIC_BASE:-crywatch}
+      - MQTT_DISCOVERY=${MQTT_DISCOVERY:-1}
+      - CRY_STATE_TIMEOUT=${CRY_STATE_TIMEOUT:-60}
     depends_on:
       - go2rtc
-      - ntfy
 
-  # ---- self-hosted push. Prefer zero-setup? Delete this service and point
-  #      NTFY_URL at https://ntfy.sh/<your-unique-topic> instead. ----
-  ntfy:
-    image: binwiederhier/ntfy:latest
-    container_name: ntfy
-    restart: unless-stopped
-    command: serve
-    ports:
-      - "8095:80"
-    environment:
-      - NTFY_BASE_URL=${NTFY_BASE_URL:-http://localhost:8095}
-      - NTFY_CACHE_FILE=/var/cache/ntfy/cache.db
-      - NTFY_UPSTREAM_BASE_URL=https://ntfy.sh   # relays iOS push; drop if Android-only
-    volumes:
-      - ./ntfy-cache:/var/cache/ntfy
+  # ---- FORK: service ntfy upstream désactivé par défaut — Pierre pilote tout via
+  #      MQTT + Home Assistant. Décommenter pour réactiver un push mobile hors LAN
+  #      (et remettre "- ntfy" dans depends_on ci-dessus). ----
+  # ntfy:
+  #   image: binwiederhier/ntfy:latest
+  #   container_name: ntfy
+  #   restart: unless-stopped
+  #   command: serve
+  #   ports:
+  #     - "8095:80"
+  #   environment:
+  #     - NTFY_BASE_URL=${NTFY_BASE_URL:-http://localhost:8095}
+  #     - NTFY_CACHE_FILE=/var/cache/ntfy/cache.db
+  #     - NTFY_UPSTREAM_BASE_URL=https://ntfy.sh
+  #   volumes:
+  #     - ./ntfy-cache:/var/cache/ntfy

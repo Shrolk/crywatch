@@ -1,34 +1,28 @@
-# Minimal go2rtc config for the viewer + cry detector.
-# Copy to go2rtc.yaml and fill in your own camera credentials / IPs.
+# go2rtc config pour le cry-detector + viewer (fork Pierre — une seule caméra).
+# Copier vers go2rtc.yaml et remplir user/mdp/IP.
 # go2rtc docs: https://github.com/AlexxIT/go2rtc
 #
-# Most ONVIF/RTSP cameras expose two streams:
-#   stream1 = main / high-res     stream2 = sub / low-res
-# The browser plays H.264 over WebRTC but NOT H.265/HEVC — so make sure the
-# stream you view is H.264. If your camera's main stream is 4K H.265, either view
-# the H.264 sub-stream, or transcode to H.264 (out of scope here; see go2rtc's
-# `ffmpeg:` source or a mediamtx + NVENC relay).
+# Le C210 sort du H.264 (confirmé dans ton setup NVR) -> compatible WebRTC.
+# IMPORTANT : le flux RTSP du Tapo doit avoir le micro activé (app Tapo ->
+# Paramètres avancés de la caméra -> Micro), sinon pas de piste audio pour
+# le classifieur ni pour l'écoute en direct. À vérifier en premier avec :
+#   ffprobe rtsp://USER:PASSWORD@CAMERA_SIMON_IP:554/stream1
 
 streams:
-  # Light sub-stream shown in the grid (low bitrate, survives remote/VPN).
-  cam1:
-    - rtsp://USER:PASSWORD@CAMERA_1_IP:554/stream2
-  # HD variant shown when you tap the tile to expand (must be H.264).
-  cam1_hd:
-    - rtsp://USER:PASSWORD@CAMERA_1_IP:554/stream1
-
-  cam2:
-    - rtsp://USER:PASSWORD@CAMERA_2_IP:554/stream2
-  cam2_hd:
-    - rtsp://USER:PASSWORD@CAMERA_2_IP:554/stream1
+  # Sous-flux léger pour la vignette (faible bitrate).
+  simon:
+    - rtsp://USER:PASSWORD@CAMERA_SIMON_IP:554/stream2
+  # Flux HD affiché en plein écran (doit rester H.264).
+  simon_hd:
+    - rtsp://USER:PASSWORD@CAMERA_SIMON_IP:554/stream1
 
 api:
-  listen: ":1984"     # WebRTC signalling + snapshot API (the viewer calls this)
+  listen: ":1984"     # signalling WebRTC + API snapshot (utilisée par le viewer)
 rtsp:
-  listen: ":8554"     # the cry detector pulls audio from here
+  listen: ":8554"     # le cry-detector lit l'audio ici
 webrtc:
   listen: ":8555"
-  # If viewer and go2rtc are NOT on the same flat network, advertise a reachable
-  # candidate here, e.g.:
+  # Si le viewer (téléphone Fully Kiosk) n'est pas sur le même réseau plat que
+  # le serveur Proxmox, décommenter et renseigner l'IP LAN du serveur go2rtc :
   # candidates:
-  #   - YOUR_HOST_IP:8555
+  #   - YOUR_PROXMOX_HOST_IP:8555

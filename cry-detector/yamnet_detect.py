@@ -28,11 +28,21 @@ Env vars (see .env.example):
   CAMS                "stream=Label,stream=Label" (stream names must match go2rtc)
   GO2RTC_RTSP         go2rtc RTSP base         (default rtsp://localhost:8554)
   CRY_CLICK_URL       URL opened when the notification is tapped
+
+--- FORK (Pierre) --------------------------------------------------------
+Ajout : publication MQTT (avec HA MQTT discovery) en plus / à la place de
+ntfy, avec un binary_sensor ON/OFF (auto-reset après CRY_STATE_TIMEOUT s)
+directement exploitable par une automation Home Assistant. ntfy devient
+optionnel : laisser NTFY_URL vide pour le désactiver.
+Env vars ajoutées (voir .env.example) :
+  MQTT_HOST, MQTT_PORT, MQTT_USER, MQTT_PASSWORD, MQTT_TOPIC_BASE,
+  MQTT_DISCOVERY, CRY_STATE_TIMEOUT
+---------------------------------------------------------------------------
 """
-import os, csv, time, math, threading, subprocess, urllib.request
+import os, csv, json, re, time, math, threading, subprocess, urllib.request
 import numpy as np
 
-NTFY       = os.environ.get("NTFY_URL", "http://localhost:8095/baby-cry")
+NTFY       = os.environ.get("NTFY_URL", "")  # vide = ntfy désactivé (fork: était actif par défaut)
 CRY_PROB   = float(os.environ.get("CRY_PROB", "0.4"))
 SUSTAIN    = int(os.environ.get("CRY_SUSTAIN_SAMPLES", "2"))
 COOLDOWN   = float(os.environ.get("CRY_COOLDOWN", "60"))
@@ -43,6 +53,74 @@ CAMS       = os.environ.get("CAMS", "cam1=Room 1,cam2=Room 2")
 RTSP_BASE  = os.environ.get("GO2RTC_RTSP", "rtsp://localhost:8554")
 CLICK_URL  = os.environ.get("CRY_CLICK_URL", "http://localhost:1985/multi.html")
 SR = 16000
+
+# --- FORK: MQTT ------------------------------------------------------------
+MQTT_HOST       = os.environ.get("MQTT_HOST", "")          # vide = MQTT désactivé
+MQTT_PORT       = int(os.environ.get("MQTT_PORT", "1883"))
+MQTT_USER       = os.environ.get("MQTT_USER", "")
+MQTT_PASSWORD   = os.environ.get("MQTT_PASSWORD", "")
+MQTT_TOPIC_BASE = os.environ.get("MQTT_TOPIC_BASE", "crywatch")
+MQTT_DISCOVERY  = os.environ.get("MQTT_DISCOVERY", "1") == "1"
+STATE_TIMEOUT   = float(os.environ.get("CRY_STATE_TIMEOUT", "60"))
+
+_mqtt = None
+if MQTT_HOST:
+    import paho.mqtt.client as mqtt
+    _mqtt = mqtt.Client(client_id="crywatch-detector", clean_session=True)
+    if MQTT_USER:
+        _mqtt.username_pw_set(MQTT_USER, MQTT_PASSWORD or None)
+    _mqtt.will_set(f"{MQTT_TOPIC_BASE}/status", "offline", retain=True)
+    _mqtt.connect(MQTT_HOST, MQTT_PORT, keepalive=30)
+    _mqtt.loop_start()
+    _mqtt.publish(f"{MQTT_TOPIC_BASE}/status", "online", retain=True)
+    print(f"[mqtt] connected to {MQTT_HOST}:{MQTT_PORT}", flush=True)
+
+
+def _slug(label):
+    return re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_")
+
+
+def mqtt_setup_discovery(label):
+    """Publie la config HA MQTT discovery -> crée automatiquement un binary_sensor."""
+    if not (_mqtt and MQTT_DISCOVERY):
+        return
+    slug = _slug(label)
+    state_topic = f"{MQTT_TOPIC_BASE}/{slug}/state"
+    payload = {
+        "name": f"Pleurs détectés — {label}",
+        "unique_id": f"{MQTT_TOPIC_BASE}_{slug}",
+        "state_topic": state_topic,
+        "payload_on": "ON",
+        "payload_off": "OFF",
+        "device_class": "sound",
+        "availability_topic": f"{MQTT_TOPIC_BASE}/status",
+        "json_attributes_topic": f"{MQTT_TOPIC_BASE}/{slug}/attributes",
+    }
+    _mqtt.publish(f"homeassistant/binary_sensor/{MQTT_TOPIC_BASE}_{slug}/config",
+                  json.dumps(payload), retain=True)
+
+
+_off_timers = {}  # label -> threading.Timer courant, pour annuler/reset l'auto-OFF
+
+
+def mqtt_set_state(label, on, pct=None):
+    if not _mqtt:
+        return
+    slug = _slug(label)
+    _mqtt.publish(f"{MQTT_TOPIC_BASE}/{slug}/state", "ON" if on else "OFF", retain=True)
+    if on and pct is not None:
+        _mqtt.publish(f"{MQTT_TOPIC_BASE}/{slug}/attributes",
+                       json.dumps({"confidence_pct": pct}), retain=True)
+    # (Ré)arme l'auto-retour à OFF après STATE_TIMEOUT s d'inactivité,
+    # pour piloter directement un trigger d'automation HA "to: on".
+    old = _off_timers.get(label)
+    if old:
+        old.cancel()
+    if on:
+        t = threading.Timer(STATE_TIMEOUT, mqtt_set_state, args=(label, False))
+        t.daemon = True
+        t.start()
+        _off_timers[label] = t
 
 import tensorflow_hub as hub  # noqa: E402
 print("[yamnet] loading model ...", flush=True)
@@ -62,6 +140,8 @@ def _h(v):
 
 
 def notify(label, pct):
+    if not NTFY:
+        return
     try:
         req = urllib.request.Request(
             NTFY,
@@ -113,6 +193,7 @@ def monitor(stream, label):
     url = f"{RTSP_BASE}/{stream}"
     streak = 0
     last_alert = 0.0
+    mqtt_setup_discovery(label)  # FORK: annonce le binary_sensor à HA une fois au démarrage
     while True:
         wav = sample_audio(url)
         now = time.time()
@@ -126,8 +207,10 @@ def monitor(stream, label):
             streak += 1
             if streak >= SUSTAIN and now - last_alert >= COOLDOWN:
                 last_alert = now
+                pct = round(score * 100)
                 print(f"[CRY] {label} cry={score:.2f} x{streak}", flush=True)
-                notify(label, round(score * 100))
+                notify(label, pct)
+                mqtt_set_state(label, True, pct)  # FORK: bascule le binary_sensor ON
         else:
             streak = 0
 

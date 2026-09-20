@@ -1,3 +1,4 @@
 numpy
 tensorflow-cpu==2.16.*
 tensorflow-hub
+paho-mqtt<2.0  # FORK: publication MQTT + HA discovery (API v1, plus simple que le client v2)
