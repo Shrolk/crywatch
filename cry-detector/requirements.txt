@@ -1,3 +1,4 @@
+setuptools  # tensorflow_hub importe pkg_resources, plus embarqué par défaut par python:3.12-slim
 numpy
 tensorflow-cpu==2.16.*
 tensorflow-hub
