@@ -62,3 +62,5 @@ vision/**/control.json
 # ...but DO keep documentation images (add explicitly, or they stay ignored).
 !vision/docs/*.png
 !docs/*.png
+!ha-addon/crywatch_cry_detector/icon.png
+!ha-addon/crywatch_cry_detector/logo.png
