@@ -1,5 +1,5 @@
 name: Crywatch Cry Detector
-version: "1.0.3"
+version: "1.0.4"
 slug: crywatch_cry_detector
 description: >-
   Détecteur de pleurs bébé (YAMNet, CPU) sur flux audio RTSP. Les caméras ne

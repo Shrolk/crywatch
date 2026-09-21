@@ -179,6 +179,29 @@ pratique maintenant que `python:3.11-slim` fonctionne. À garder en tête si
 `cry-detector/` (legacy, upstream) est retouché un jour : rester sur
 `3.11-slim`, pas `3.12`.
 
+## Dépendance internet de l'add-on (2026-09-21)
+
+Pierre a demandé si le projet tourne 100% en local. Réponse honnête : ça
+devait être le cas (c'est tout le principe du projet — voir README, section
+"Why" de l'upstream), mais l'add-on tel qu'écrit avait un vrai trou :
+`run.py` charge YAMNet via `hub.load("https://tfhub.dev/google/yamnet/1")`
+**au démarrage du conteneur**, sans qu'il soit mis en cache de façon
+persistante — donc un redémarrage de l'add-on (reboot Supervisor, coupure
+de courant, mise à jour) aurait retéléchargé le modèle à chaque fois,
+nécessitant internet à chaque démarrage. Le vieux `cry-detector/Dockerfile`
+(upstream) évitait déjà ça en téléchargeant le modèle **au moment du build**
+(`TFHUB_CACHE_DIR` + `hub.load(...)` dans un `RUN`) — mon Dockerfile pour
+l'add-on ne le faisait pas. Corrigé en 1.0.4 : même pattern, modèle
+maintenant cuit dans l'image. Après ce rebuild (qui a besoin d'internet,
+comme n'importe quelle installation), l'add-on démarre et redémarre sans
+réseau. Non testé en conditions réelles (coupure internet volontaire) —
+mais la mécanique (`TFHUB_CACHE_DIR` pointant vers un dossier pré-rempli au
+build) est identique à celle du `cry-detector/` upstream, qui fonctionne.
+
+Le reste de la chaîne (caméra RTSP, add-on, intégration HA, automation) est
+déjà 100% local — aucune autre dépendance internet identifiée pour le
+fonctionnement courant.
+
 ## Déploiement chez toi
 
 1. Vérifier le micro RTSP du C210 (`ffprobe` sur l'URL RTSP — piste audio présente ?).

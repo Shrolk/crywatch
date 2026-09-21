@@ -11,6 +11,15 @@ RUN apt-get update \
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Bake the YAMNet model into the image at build time, so the container needs
+# no network at start/restart — only the build itself needs internet (same
+# as pulling the base image or pip packages). Without this, hub.load() in
+# run.py would re-download it from tfhub.dev on every container start.
+ENV TFHUB_CACHE_DIR=/models/tfhub
+RUN mkdir -p /models/tfhub \
+    && python -c "import tensorflow_hub as hub; hub.load('https://tfhub.dev/google/yamnet/1')"
+
 COPY run.py .
 
 CMD ["python3", "run.py"]
