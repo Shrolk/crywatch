@@ -10,9 +10,12 @@
       },
       "cameras": {
         "title": "Choisir les caméras",
-        "description": "Sélectionne les entités caméra HA à surveiller — leur flux RTSP est récupéré automatiquement, rien à saisir à la main.",
+        "description": "Sélectionne les entités caméra HA à surveiller — leur flux RTSP est récupéré automatiquement, rien à saisir à la main. L'appareil Fully Kiosk est optionnel : laisse-le vide si tu ne veux pas de réveil automatique d'écran.",
         "data": {
-          "cameras": "Caméras"
+          "cameras": "Caméras",
+          "fully_kiosk_device": "Appareil Fully Kiosk (optionnel)",
+          "fully_kiosk_url": "URL à afficher quand un pleur est détecté (optionnel)",
+          "fully_kiosk_volume": "Volume d'alerte"
         }
       }
     },
@@ -26,9 +29,12 @@
   "options": {
     "step": {
       "init": {
-        "title": "Caméras surveillées",
+        "title": "Caméras et alerte Fully Kiosk",
         "data": {
-          "cameras": "Caméras"
+          "cameras": "Caméras",
+          "fully_kiosk_device": "Appareil Fully Kiosk (optionnel)",
+          "fully_kiosk_url": "URL à afficher quand un pleur est détecté (optionnel)",
+          "fully_kiosk_volume": "Volume d'alerte"
         }
       }
     }

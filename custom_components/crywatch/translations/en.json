@@ -10,9 +10,12 @@
       },
       "cameras": {
         "title": "Pick cameras",
-        "description": "Select the HA camera entities to monitor — their RTSP stream is resolved automatically, nothing to type in by hand.",
+        "description": "Select the HA camera entities to monitor — their RTSP stream is resolved automatically, nothing to type in by hand. The Fully Kiosk device is optional: leave it empty if you don't want automatic screen wake.",
         "data": {
-          "cameras": "Cameras"
+          "cameras": "Cameras",
+          "fully_kiosk_device": "Fully Kiosk device (optional)",
+          "fully_kiosk_url": "URL to show when a cry is detected (optional)",
+          "fully_kiosk_volume": "Alert volume"
         }
       }
     },
@@ -26,9 +29,12 @@
   "options": {
     "step": {
       "init": {
-        "title": "Monitored cameras",
+        "title": "Cameras and Fully Kiosk alert",
         "data": {
-          "cameras": "Cameras"
+          "cameras": "Cameras",
+          "fully_kiosk_device": "Fully Kiosk device (optional)",
+          "fully_kiosk_url": "URL to show when a cry is detected (optional)",
+          "fully_kiosk_volume": "Alert volume"
         }
       }
     }

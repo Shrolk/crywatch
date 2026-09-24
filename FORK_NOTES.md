@@ -179,6 +179,49 @@ pratique maintenant que `python:3.11-slim` fonctionne. À garder en tête si
 `cry-detector/` (legacy, upstream) est retouché un jour : rester sur
 `3.11-slim`, pas `3.12`.
 
+## Alerte Fully Kiosk intégrée (2026-09-24)
+
+Sur demande de Pierre : au lieu d'une automation HA séparée (qu'il n'avait
+en fait jamais créée — la mention dans une conversation précédente était
+restée au stade d'idée), l'intégration Crywatch peut elle-même réveiller un
+appareil Fully Kiosk PLUS, y afficher une URL (dashboard caméra) et monter
+le son, quand un pleur est détecté — et revenir en arrière quand le
+`binary_sensor` repasse à OFF (`CRY_STATE_TIMEOUT` côté add-on).
+
+**Vérifié en direct contre le HA de Pierre** (via le connecteur MCP
+Home Assistant disponible dans cette session — utilisé pour la première
+fois ici ; aurait dû l'être plus tôt pour le débogage du hostname de
+l'add-on). Points confirmés, pas devinés :
+- `ha_list_services(domain="fully_kiosk")` : seulement 3 services —
+  `load_url`, `start_application`, `set_config`. Rien pour allumer l'écran
+  ou monter le son directement.
+- Mais l'intégration crée aussi des entités standards par appareil :
+  `button` (dont *Mettre au premier/arrière-plan*, *Charger l'URL de
+  démarrage*), `media_player` (volume), `number` (luminosité), etc. — ce
+  sont ces entités, pas des services `fully_kiosk.*`, qui permettent le
+  reste.
+- Les noms affichés sont traduits en français (« Mettre au premier
+  plan ») donc **jamais** utilisés pour identifier l'entité dans le code —
+  le `unique_id` est stable et en anglais quel que soit la langue de
+  l'installation : `<id>-toForeground`, `<id>-toBackground`,
+  `<id>-loadStartUrl`, `<id>-mediaplayer`. `custom_components/crywatch/
+  kiosk.py` les retrouve via le registre d'entités par leur `device_id`
+  (choisi dans l'intégration via un `DeviceSelector`) + ce suffixe, jamais
+  par nom.
+- Testé uniquement en lecture (services listés, entités inspectées) —
+  **les appels de service (`button.press`, `media_player.volume_set`,
+  `fully_kiosk.load_url`) n'ont pas été déclenchés réellement**, donc pas
+  de garantie que `toForeground` réveille vraiment l'écran (vs juste
+  ramener l'app au premier plan sans sortir de veille) — à valider en
+  vrai en déclenchant un pleur devant la caméra.
+
+**Nouveaux réglages** (dans la même étape que le choix des caméras,
+config initiale et Options) : appareil Fully Kiosk (optionnel — vide =
+fonctionnalité désactivée), URL à charger (dashboard HA affichant la
+caméra — **doit déjà être accessible sans re-login dans le navigateur
+Fully Kiosk**, sinon `load_url` affichera un écran de connexion au lieu
+de la caméra), volume d'alerte (0-100 %).
+
 ## Dépendance internet de l'add-on (2026-09-21)
 
 Pierre a demandé si le projet tourne 100% en local. Réponse honnête : ça

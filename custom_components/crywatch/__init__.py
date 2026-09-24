@@ -19,6 +19,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import CONF_CAMERAS, DOMAIN
 from .coordinator import CrywatchCoordinator
+from .kiosk import async_setup_kiosk_alert
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -68,6 +69,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    async_setup_kiosk_alert(hass, entry, coordinator)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
 

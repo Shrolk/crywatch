@@ -13,7 +13,16 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import CONF_CAMERAS, DEFAULT_HOST, DEFAULT_PORT, DOMAIN
+from .const import (
+    CONF_CAMERAS,
+    CONF_FULLY_KIOSK_DEVICE,
+    CONF_KIOSK_URL,
+    CONF_KIOSK_VOLUME,
+    DEFAULT_HOST,
+    DEFAULT_KIOSK_VOLUME,
+    DEFAULT_PORT,
+    DOMAIN,
+)
 
 STEP_USER_SCHEMA = vol.Schema(
     {
@@ -23,12 +32,29 @@ STEP_USER_SCHEMA = vol.Schema(
 )
 
 
-def _cameras_schema(default: list[str] | None = None) -> vol.Schema:
+def _cameras_schema(
+    cameras: list[str] | None = None,
+    kiosk_device: str | None = None,
+    kiosk_url: str = "",
+    kiosk_volume: int = DEFAULT_KIOSK_VOLUME,
+) -> vol.Schema:
     return vol.Schema(
         {
-            vol.Optional(CONF_CAMERAS, default=default or []): selector.EntitySelector(
+            vol.Optional(CONF_CAMERAS, default=cameras or []): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="camera", multiple=True)
-            )
+            ),
+            # Optional: wake a Fully Kiosk PLUS device and show the camera + sound
+            # when a cry is detected. Left empty, no kiosk action is triggered.
+            vol.Optional(CONF_FULLY_KIOSK_DEVICE, default=kiosk_device): selector.DeviceSelector(
+                selector.DeviceSelectorConfig(integration="fully_kiosk")
+            ),
+            vol.Optional(CONF_KIOSK_URL, default=kiosk_url): selector.TextSelector(),
+            vol.Optional(CONF_KIOSK_VOLUME, default=kiosk_volume): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0, max=100, step=5, unit_of_measurement="%",
+                    mode=selector.NumberSelectorMode.SLIDER,
+                )
+            ),
         }
     )
 
@@ -72,7 +98,7 @@ class CrywatchConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_create_entry(
                 title="Crywatch",
                 data={CONF_HOST: self._host, CONF_PORT: self._port},
-                options={CONF_CAMERAS: user_input[CONF_CAMERAS]},
+                options=user_input,
             )
         return self.async_show_form(step_id="cameras", data_schema=_cameras_schema())
 
@@ -92,6 +118,12 @@ class CrywatchOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is not None:
-            return self.async_create_entry(title="", data={CONF_CAMERAS: user_input[CONF_CAMERAS]})
-        current = self.config_entry.options.get(CONF_CAMERAS, [])
-        return self.async_show_form(step_id="init", data_schema=_cameras_schema(current))
+            return self.async_create_entry(title="", data=user_input)
+        opts = self.config_entry.options
+        schema = _cameras_schema(
+            cameras=opts.get(CONF_CAMERAS, []),
+            kiosk_device=opts.get(CONF_FULLY_KIOSK_DEVICE),
+            kiosk_url=opts.get(CONF_KIOSK_URL, ""),
+            kiosk_volume=opts.get(CONF_KIOSK_VOLUME, DEFAULT_KIOSK_VOLUME),
+        )
+        return self.async_show_form(step_id="init", data_schema=schema)

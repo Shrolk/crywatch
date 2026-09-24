@@ -3,6 +3,10 @@
 DOMAIN = "crywatch"
 
 CONF_CAMERAS = "cameras"
+CONF_FULLY_KIOSK_DEVICE = "fully_kiosk_device"
+CONF_KIOSK_URL = "fully_kiosk_url"
+CONF_KIOSK_VOLUME = "fully_kiosk_volume"
+DEFAULT_KIOSK_VOLUME = 80
 
 # Supervisor-internal hostname for the companion add-on. For a repository
 # (non-official) add-on, Supervisor prefixes the config.yaml slug with a hash

@@ -68,12 +68,19 @@ Deux entités apparaissent par caméra choisie, groupées en un appareil HA :
 `sensor.<caméra>_confiance_pleurs`. Pour ajouter/retirer une caméra plus
 tard : *Paramètres → Appareils et services → Crywatch → ⋮ → Configurer*.
 
-### 4. Brancher ton automation
+### 4. Réveil automatique d'un appareil Fully Kiosk (optionnel)
 
-Utilise `binary_sensor.<caméra>_pleurs_detectes` passant à `on` comme
-trigger (ex. réveil d'un tableau Fully Kiosk — voir
-[FORK_NOTES.md](FORK_NOTES.md), section *Lien avec l'automation Fully
-Kiosk*).
+Dans la même page de configuration de l'intégration (*⋮ → Configurer*),
+choisis un appareil **Fully Kiosk Browser PLUS** déjà connecté à HA
+(*Paramètres → Appareils et services → Fully Kiosk Browser* s'il n'est pas
+encore ajouté), une URL de dashboard à afficher, et un volume d'alerte.
+Quand un pleur est détecté, l'intégration réveille l'appareil au premier
+plan, charge cette URL et monte le son — puis revient en arrière
+automatiquement quand l'alerte se termine. Laisse le champ appareil vide
+pour désactiver cette fonctionnalité.
+
+**Sinon**, utilise `binary_sensor.<caméra>_pleurs_detectes` passant à `on`
+comme trigger dans ta propre automation HA.
 
 ## Réglages de détection
 
