@@ -49,7 +49,12 @@ def _resolve_kiosk_url(hass: HomeAssistant, value: str | None) -> str | None:
             "Network) — can't turn kiosk path %r into a URL", value,
         )
         return None
-    return f"{base}/{value.lstrip('/')}"
+    full_url = f"{base}/{value.lstrip('/')}"
+    _LOGGER.info(
+        "Crywatch: resolved kiosk path %r to %r — must be reachable from the kiosk "
+        "device itself, not just from Home Assistant", value, full_url,
+    )
+    return full_url
 
 
 class KioskAlertManager:
