@@ -14,7 +14,7 @@
         "data": {
           "cameras": "Cameras",
           "fully_kiosk_device": "Fully Kiosk device (optional)",
-          "fully_kiosk_url": "URL to show when a cry is detected (optional)",
+          "fully_kiosk_url": "Dashboard path to show (e.g. dashboard-test/simon) — optional",
           "fully_kiosk_volume": "Alert volume"
         }
       }
@@ -33,7 +33,7 @@
         "data": {
           "cameras": "Cameras",
           "fully_kiosk_device": "Fully Kiosk device (optional)",
-          "fully_kiosk_url": "URL to show when a cry is detected (optional)",
+          "fully_kiosk_url": "Dashboard path to show (e.g. dashboard-test/simon) — optional",
           "fully_kiosk_volume": "Alert volume"
         }
       }

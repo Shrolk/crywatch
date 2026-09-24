@@ -73,10 +73,12 @@ tard : *Paramètres → Appareils et services → Crywatch → ⋮ → Configure
 Dans la même page de configuration de l'intégration (*⋮ → Configurer*),
 choisis un appareil **Fully Kiosk Browser PLUS** déjà connecté à HA
 (*Paramètres → Appareils et services → Fully Kiosk Browser* s'il n'est pas
-encore ajouté), une URL de dashboard à afficher, et un volume d'alerte.
-Quand un pleur est détecté, l'intégration réveille l'appareil au premier
-plan, charge cette URL et monte le son — puis revient en arrière
-automatiquement quand l'alerte se termine. Laisse le champ appareil vide
+encore ajouté), le **chemin** d'un tableau de bord/vue à afficher (ex.
+`dashboard-test/simon` — pas besoin de l'URL complète, elle est reconstruite
+automatiquement à partir de l'URL de ton HA), et un volume d'alerte. Quand
+un pleur est détecté, l'intégration réveille l'appareil au premier plan,
+charge cette vue et monte le son — puis revient en arrière automatiquement
+quand l'alerte se termine. Laisse le champ appareil vide
 pour désactiver cette fonctionnalité.
 
 Une fois un appareil configuré, un bouton **« Tester l'alerte Fully

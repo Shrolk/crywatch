@@ -16,6 +16,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.network import NoURLAvailableError, get_url
 
 from .const import CONF_FULLY_KIOSK_DEVICE, CONF_KIOSK_URL, CONF_KIOSK_VOLUME, DEFAULT_KIOSK_VOLUME
 from .coordinator import CrywatchCoordinator
@@ -29,6 +30,26 @@ def _find_entity(hass: HomeAssistant, device_id: str, unique_id_suffix: str) -> 
         if entity.platform == "fully_kiosk" and entity.unique_id.endswith(unique_id_suffix):
             return entity.entity_id
     return None
+
+
+def _resolve_kiosk_url(hass: HomeAssistant, value: str | None) -> str | None:
+    """Build the full URL to load on the kiosk from a dashboard path (e.g.
+    "dashboard-test/simon"), using HA's own configured base URL — so it keeps
+    working if the LAN IP/port ever changes. A full http(s):// value is used
+    as-is (e.g. to point at something outside this HA instance)."""
+    if not value:
+        return None
+    if value.startswith("http://") or value.startswith("https://"):
+        return value
+    try:
+        base = get_url(hass, allow_cloud=False, prefer_external=False)
+    except NoURLAvailableError:
+        _LOGGER.warning(
+            "Crywatch: no usable Home Assistant URL found (check Settings > System > "
+            "Network) — can't turn kiosk path %r into a URL", value,
+        )
+        return None
+    return f"{base}/{value.lstrip('/')}"
 
 
 class KioskAlertManager:
@@ -106,7 +127,7 @@ def build_kiosk_alert_manager(hass: HomeAssistant, entry: ConfigEntry) -> KioskA
     return KioskAlertManager(
         hass,
         device_id=device_id,
-        url=entry.options.get(CONF_KIOSK_URL) or None,
+        url=_resolve_kiosk_url(hass, entry.options.get(CONF_KIOSK_URL)),
         volume_pct=entry.options.get(CONF_KIOSK_VOLUME, DEFAULT_KIOSK_VOLUME),
         foreground=foreground,
         background=_find_entity(hass, device_id, "-toBackground"),

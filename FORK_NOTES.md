@@ -179,6 +179,33 @@ pratique maintenant que `python:3.11-slim` fonctionne. À garder en tête si
 `cry-detector/` (legacy, upstream) est retouché un jour : rester sur
 `3.11-slim`, pas `3.12`.
 
+## URL de l'alerte générée dynamiquement (2026-09-24)
+
+Sur demande de Pierre : plus besoin de coller une URL complète. Le champ
+« URL » devient un **chemin de tableau de bord** (ex. `dashboard-test/
+simon`), et `kiosk.py` construit l'URL complète tout seul via l'API HA
+`homeassistant.helpers.network.get_url()` (préférant l'URL interne,
+n'utilisant jamais le cloud Nabu Casa) — donc ça continue de marcher si
+l'IP/le port de HA changent un jour. Une valeur commençant par `http://`
+ou `https://` est utilisée telle quelle (échappatoire pour pointer
+ailleurs qu'un chemin de ce HA).
+
+**Fait en direct via le connecteur MCP** (voir plus haut) : création d'une
+nouvelle vue `simon` (type `panel`, carte `picture-entity` sur
+`camera.simon` en direct, plein écran, sans chrome) dans le dashboard
+**`dashboard-test`** de Pierre — celui déjà chargé sur sa tablette
+Ozhora-S21 (confirmé : ses cartes de navigation appellent
+`browser_mod.refresh` sur le `device_id` de cette même tablette, et
+utilisent `input_boolean.kiosk_mode`). URL résultante :
+`dashboard-test/simon`, à renseigner tel quel dans le champ « chemin »
+côté intégration. Écriture confirmée (`post_write_verified: true`), mais
+jamais vue rendue réellement sur l'appareil — vérifie que la vue
+s'affiche correctement avant de compter dessus lors d'une vraie alerte.
+
+Attention notée mais pas vérifiable à distance : le navigateur Fully
+Kiosk de la tablette doit déjà être connecté/authentifié à HA pour que
+`load_url` affiche la caméra directement plutôt qu'un écran de connexion.
+
 ## Alerte Fully Kiosk intégrée (2026-09-24)
 
 Sur demande de Pierre : au lieu d'une automation HA séparée (qu'il n'avait

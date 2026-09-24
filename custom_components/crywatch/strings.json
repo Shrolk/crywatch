@@ -14,7 +14,7 @@
         "data": {
           "cameras": "Caméras",
           "fully_kiosk_device": "Appareil Fully Kiosk (optionnel)",
-          "fully_kiosk_url": "URL à afficher quand un pleur est détecté (optionnel)",
+          "fully_kiosk_url": "Chemin du tableau de bord à afficher (ex. dashboard-test/simon) — optionnel",
           "fully_kiosk_volume": "Volume d'alerte"
         }
       }
@@ -33,7 +33,7 @@
         "data": {
           "cameras": "Caméras",
           "fully_kiosk_device": "Appareil Fully Kiosk (optionnel)",
-          "fully_kiosk_url": "URL à afficher quand un pleur est détecté (optionnel)",
+          "fully_kiosk_url": "Chemin du tableau de bord à afficher (ex. dashboard-test/simon) — optionnel",
           "fully_kiosk_volume": "Volume d'alerte"
         }
       }
