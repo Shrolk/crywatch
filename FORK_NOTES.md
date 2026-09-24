@@ -256,6 +256,29 @@ l'add-on). Points confirmés, pas devinés :
   ramener l'app au premier plan sans sortir de veille) — à valider en
   vrai en déclenchant un pleur devant la caméra.
 
+## Écran éteint ne se réveillait pas (2026-09-24, suite tests réels)
+
+Confirmé par Pierre en conditions réelles : le bouton de test fonctionnait
+tant que l'écran de la tablette restait allumé, mais **rien ne se passait
+écran éteint** — exactement le trou anticipé ci-dessus. `-toForeground`
+ramène l'app Fully Kiosk au premier plan mais ne sort pas l'écran de veille.
+
+Fix : l'intégration officielle `fully_kiosk` expose aussi un `switch` pour
+l'écran (`unique_id` suffixe `-screenOn`, ex. `switch.ozhora_s21_ecran`,
+nom affiché « Écran ») — confirmé via le connecteur MCP HA
+(`ha_get_entity` sur l'entité réelle de Pierre, `platform: fully_kiosk`,
+même `device_id` que les autres entités kiosk). `kiosk.py` le résout comme
+les autres (même pattern `_find_entity` par suffixe) et l'allume
+(`switch.turn_on`) **avant** `-toForeground`, puisque rien de tout le reste
+n'a d'effet visible tant que l'écran physique est éteint.
+
+Pas de `switch.turn_off` symétrique dans `async_revert()` — on laisse le
+minuteur de veille natif de Fully Kiosk ré-éteindre l'écran plutôt que de
+forcer l'extinction (qui couperait aussi un usage normal de la tablette en
+cours). Toujours pas re-testé en conditions réelles après ce fix
+(nécessite un vrai cycle écran éteint → pleur/bouton test → écran qui
+s'allume) — c'est l'action immédiate suivante.
+
 **Bouton de test** (`button.py`, même jour) : si un appareil Fully Kiosk est
 configuré, un bouton `button.crywatch_tester_l_alerte_fully_kiosk` apparaît
 (appareil HA « Crywatch ») — le presser rejoue exactement la même séquence

@@ -70,6 +70,7 @@ class KioskAlertManager:
         background: str | None,
         start_url_button: str | None,
         media_player: str | None,
+        screen_switch: str | None,
     ) -> None:
         self.hass = hass
         self.device_id = device_id
@@ -79,12 +80,19 @@ class KioskAlertManager:
         self._background = background
         self._start_url_button = start_url_button
         self._media_player = media_player
+        self._screen_switch = screen_switch
 
     async def async_alert(self) -> None:
+        # Screen must be woken FIRST — "to foreground" and load_url are no-ops
+        # on a sleeping device (nothing to show until the screen is on).
         # "to foreground" resets/reloads the app — must run BEFORE load_url,
         # not after, or it wipes out the page load_url just set (confirmed by
         # testing load_url alone vs. in this sequence against a real device).
         try:
+            if self._screen_switch:
+                await self.hass.services.async_call(
+                    "switch", "turn_on", {"entity_id": self._screen_switch}
+                )
             await self.hass.services.async_call("button", "press", {"entity_id": self._foreground})
             if self._media_player:
                 await self.hass.services.async_call(
@@ -141,6 +149,7 @@ def build_kiosk_alert_manager(hass: HomeAssistant, entry: ConfigEntry) -> KioskA
         background=_find_entity(hass, device_id, "-toBackground"),
         start_url_button=_find_entity(hass, device_id, "-loadStartUrl"),
         media_player=_find_entity(hass, device_id, "-mediaplayer"),
+        screen_switch=_find_entity(hass, device_id, "-screenOn"),
     )
 
 
