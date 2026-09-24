@@ -31,62 +31,101 @@ def _find_entity(hass: HomeAssistant, device_id: str, unique_id_suffix: str) -> 
     return None
 
 
-def async_setup_kiosk_alert(
-    hass: HomeAssistant, entry: ConfigEntry, coordinator: CrywatchCoordinator
-) -> None:
-    """Wire the coordinator's cry state to Fully Kiosk actions, if configured."""
+class KioskAlertManager:
+    """Wakes/reverts a Fully Kiosk device — shared by the cry listener and the test button."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        device_id: str,
+        url: str | None,
+        volume_pct: float,
+        foreground: str,
+        background: str | None,
+        start_url_button: str | None,
+        media_player: str | None,
+    ) -> None:
+        self.hass = hass
+        self.device_id = device_id
+        self._url = url
+        self._volume_pct = volume_pct
+        self._foreground = foreground
+        self._background = background
+        self._start_url_button = start_url_button
+        self._media_player = media_player
+
+    async def async_alert(self) -> None:
+        try:
+            if self._url:
+                await self.hass.services.async_call(
+                    "fully_kiosk", "load_url", {"device_id": self.device_id, "url": self._url},
+                )
+            if self._media_player:
+                await self.hass.services.async_call(
+                    "media_player",
+                    "volume_set",
+                    {"entity_id": self._media_player, "volume_level": self._volume_pct / 100},
+                )
+                await self.hass.services.async_call(
+                    "media_player",
+                    "volume_mute",
+                    {"entity_id": self._media_player, "is_volume_muted": False},
+                )
+            await self.hass.services.async_call("button", "press", {"entity_id": self._foreground})
+        except Exception:  # noqa: BLE001 - device offline shouldn't break the caller
+            _LOGGER.exception("Crywatch: fully_kiosk alert failed for device %s", self.device_id)
+
+    async def async_revert(self) -> None:
+        try:
+            if self._start_url_button:
+                await self.hass.services.async_call(
+                    "button", "press", {"entity_id": self._start_url_button}
+                )
+            if self._background:
+                await self.hass.services.async_call(
+                    "button", "press", {"entity_id": self._background}
+                )
+        except Exception:  # noqa: BLE001 - device offline shouldn't break the caller
+            _LOGGER.exception("Crywatch: fully_kiosk revert failed for device %s", self.device_id)
+
+
+def build_kiosk_alert_manager(hass: HomeAssistant, entry: ConfigEntry) -> KioskAlertManager | None:
+    """Resolve the configured Fully Kiosk device's entities. None if unconfigured/incomplete."""
     device_id = entry.options.get(CONF_FULLY_KIOSK_DEVICE)
     if not device_id:
-        return
-
-    url = entry.options.get(CONF_KIOSK_URL) or None
-    volume_pct = entry.options.get(CONF_KIOSK_VOLUME, DEFAULT_KIOSK_VOLUME)
+        return None
 
     foreground = _find_entity(hass, device_id, "-toForeground")
-    background = _find_entity(hass, device_id, "-toBackground")
-    start_url_button = _find_entity(hass, device_id, "-loadStartUrl")
-    media_player = _find_entity(hass, device_id, "-mediaplayer")
-
     if not foreground:
         _LOGGER.warning(
             "Crywatch: fully_kiosk device %s has no 'to foreground' button — "
             "kiosk alert disabled for this entry", device_id,
         )
-        return
+        return None
+
+    return KioskAlertManager(
+        hass,
+        device_id=device_id,
+        url=entry.options.get(CONF_KIOSK_URL) or None,
+        volume_pct=entry.options.get(CONF_KIOSK_VOLUME, DEFAULT_KIOSK_VOLUME),
+        foreground=foreground,
+        background=_find_entity(hass, device_id, "-toBackground"),
+        start_url_button=_find_entity(hass, device_id, "-loadStartUrl"),
+        media_player=_find_entity(hass, device_id, "-mediaplayer"),
+    )
+
+
+def async_setup_kiosk_alert(
+    hass: HomeAssistant, entry: ConfigEntry, coordinator: CrywatchCoordinator
+) -> KioskAlertManager | None:
+    """Build the manager and wire it to the coordinator's cry-state transitions."""
+    manager = build_kiosk_alert_manager(hass, entry)
+    if manager is None:
+        return None
 
     # crying state per camera key, as of the last coordinator refresh — to
     # detect ON/OFF transitions rather than re-firing on every 5s poll.
     previous: dict[str, bool] = {}
-
-    async def _alert() -> None:
-        try:
-            if url:
-                await hass.services.async_call(
-                    "fully_kiosk", "load_url", {"device_id": device_id, "url": url},
-                )
-            if media_player:
-                await hass.services.async_call(
-                    "media_player",
-                    "volume_set",
-                    {"entity_id": media_player, "volume_level": volume_pct / 100},
-                )
-                await hass.services.async_call(
-                    "media_player",
-                    "volume_mute",
-                    {"entity_id": media_player, "is_volume_muted": False},
-                )
-            await hass.services.async_call("button", "press", {"entity_id": foreground})
-        except Exception:  # noqa: BLE001 - device offline shouldn't break the listener
-            _LOGGER.exception("Crywatch: fully_kiosk alert failed for device %s", device_id)
-
-    async def _revert() -> None:
-        try:
-            if start_url_button:
-                await hass.services.async_call("button", "press", {"entity_id": start_url_button})
-            if background:
-                await hass.services.async_call("button", "press", {"entity_id": background})
-        except Exception:  # noqa: BLE001 - device offline shouldn't break the listener
-            _LOGGER.exception("Crywatch: fully_kiosk revert failed for device %s", device_id)
 
     @callback
     def _on_update() -> None:
@@ -95,8 +134,9 @@ def async_setup_kiosk_alert(
             now = bool(cam.get("crying"))
             previous[key] = now
             if now and not was:
-                hass.async_create_task(_alert())
+                hass.async_create_task(manager.async_alert())
             elif was and not now:
-                hass.async_create_task(_revert())
+                hass.async_create_task(manager.async_revert())
 
     entry.async_on_unload(coordinator.async_add_listener(_on_update))
+    return manager

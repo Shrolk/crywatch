@@ -215,6 +215,14 @@ l'add-on). Points confirmés, pas devinés :
   ramener l'app au premier plan sans sortir de veille) — à valider en
   vrai en déclenchant un pleur devant la caméra.
 
+**Bouton de test** (`button.py`, même jour) : si un appareil Fully Kiosk est
+configuré, un bouton `button.crywatch_tester_l_alerte_fully_kiosk` apparaît
+(appareil HA « Crywatch ») — le presser rejoue exactement la même séquence
+qu'un vrai pleur détecté (`KioskAlertManager.async_alert()`), puis revient
+en arrière automatiquement 10s après (`async_revert()`), sans attendre ni
+simuler un vrai pleur. Utile pour valider que `-toForeground` réveille
+vraiment l'écran avant de faire confiance au déclenchement automatique.
+
 **Nouveaux réglages** (dans la même étape que le choix des caméras,
 config initiale et Options) : appareil Fully Kiosk (optionnel — vide =
 fonctionnalité désactivée), URL à charger (dashboard HA affichant la

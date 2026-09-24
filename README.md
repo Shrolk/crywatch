@@ -79,6 +79,11 @@ plan, charge cette URL et monte le son — puis revient en arrière
 automatiquement quand l'alerte se termine. Laisse le champ appareil vide
 pour désactiver cette fonctionnalité.
 
+Une fois un appareil configuré, un bouton **« Tester l'alerte Fully
+Kiosk »** apparaît (appareil HA *Crywatch*) : il rejoue la même séquence
+sans attendre un vrai pleur, pratique pour vérifier que ça réveille bien
+l'écran avant de faire confiance au déclenchement automatique.
+
 **Sinon**, utilise `binary_sensor.<caméra>_pleurs_detectes` passant à `on`
 comme trigger dans ta propre automation HA.
 

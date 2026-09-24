@@ -23,7 +23,7 @@ from .kiosk import async_setup_kiosk_alert
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[str] = ["binary_sensor", "sensor"]
+PLATFORMS: list[str] = ["binary_sensor", "sensor", "button"]
 
 
 async def _push_cameras(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -67,9 +67,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = CrywatchCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
 
+    coordinator.kiosk_manager = async_setup_kiosk_alert(hass, entry, coordinator)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    async_setup_kiosk_alert(hass, entry, coordinator)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
 
