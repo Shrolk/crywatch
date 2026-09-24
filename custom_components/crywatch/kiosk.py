@@ -81,11 +81,11 @@ class KioskAlertManager:
         self._media_player = media_player
 
     async def async_alert(self) -> None:
+        # "to foreground" resets/reloads the app — must run BEFORE load_url,
+        # not after, or it wipes out the page load_url just set (confirmed by
+        # testing load_url alone vs. in this sequence against a real device).
         try:
-            if self._url:
-                await self.hass.services.async_call(
-                    "fully_kiosk", "load_url", {"device_id": self.device_id, "url": self._url},
-                )
+            await self.hass.services.async_call("button", "press", {"entity_id": self._foreground})
             if self._media_player:
                 await self.hass.services.async_call(
                     "media_player",
@@ -97,7 +97,10 @@ class KioskAlertManager:
                     "volume_mute",
                     {"entity_id": self._media_player, "is_volume_muted": False},
                 )
-            await self.hass.services.async_call("button", "press", {"entity_id": self._foreground})
+            if self._url:
+                await self.hass.services.async_call(
+                    "fully_kiosk", "load_url", {"device_id": self.device_id, "url": self._url},
+                )
         except Exception:  # noqa: BLE001 - device offline shouldn't break the caller
             _LOGGER.exception("Crywatch: fully_kiosk alert failed for device %s", self.device_id)
 

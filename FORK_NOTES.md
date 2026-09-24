@@ -179,6 +179,20 @@ pratique maintenant que `python:3.11-slim` fonctionne. À garder en tête si
 `cry-detector/` (legacy, upstream) est retouché un jour : rester sur
 `3.11-slim`, pas `3.12`.
 
+## Bug résolu chez Pierre : la caméra ne s'affichait pas (2026-09-24)
+
+Diagnostiqué en direct avec le connecteur MCP plutôt qu'en devinant :
+`fully_kiosk.load_url` appelé seul (via `ha_call_service`, sans le reste
+de la séquence) affichait bien la caméra sur la tablette. Mais dans
+`async_alert()`, il était appelé **avant** `button.press` sur
+`-toForeground` — et « mettre au premier plan » réinitialise/recharge
+l'appli Fully Kiosk, écrasant la page tout juste chargée. D'où : réveil
+au premier plan OK, mais retour à la page HA par défaut au lieu de la
+caméra. Fix : réordonné pour que `load_url` soit la **dernière** action
+(foreground puis volume puis load_url) — pas encore re-testé avec ce
+nouvel ordre sur l'appareil réel, à confirmer après mise à jour vers
+1.3.2.
+
 ## URL de l'alerte générée dynamiquement (2026-09-24)
 
 Sur demande de Pierre : plus besoin de coller une URL complète. Le champ
