@@ -317,6 +317,44 @@ Le reste de la chaîne (caméra RTSP, add-on, intégration HA, automation) est
 déjà 100% local — aucune autre dépendance internet identifiée pour le
 fonctionnement courant.
 
+## Intégration indisponible après chaque redémarrage HA (2026-09-28)
+
+Symptôme rapporté par Pierre : après chaque redémarrage de Home Assistant,
+l'intégration Crywatch reste « indisponible » tant qu'il ne la recharge pas
+manuellement (Paramètres → Appareils et services → Crywatch → Recharger).
+
+Cause trouvée dans `ha-addon/crywatch_cry_detector/run.py` : `hub.load(...)`
+(chargement YAMNet, potentiellement plusieurs dizaines de secondes sur du
+matériel modeste — CPU seul, pas de GPU) s'exécutait **avant** que le
+serveur HTTP (`ThreadingHTTPServer`, port 8091) ne commence à écouter. Le
+port ne répondait donc à rien pendant tout ce temps. Or `boot: auto` côté
+add-on ne garantit que le démarrage du conteneur, pas que l'app à
+l'intérieur soit prête — et l'intégration `custom_components/crywatch`
+interroge ce port dès son propre `async_setup_entry`, qui tourne pendant le
+démarrage de HA, en parallèle du chargement de l'add-on, pas après. Le
+premier refresh du coordinator échouait (connexion refusée) →
+`ConfigEntryNotReady` → HA retente avec un backoff — qui aurait dû finir
+par réussir tout seul, mais visiblement pas assez vite/fiablement pour
+éviter le symptôme observé.
+
+Fix (1.0.5) : le serveur HTTP démarre en premier (thread dédié, non-daemon,
+qui maintient le process en vie), et répond immédiatement sur `/api/state`
+(état vide) pendant que YAMNet charge ensuite dans le thread principal. Les
+threads de monitoring par caméra (`monitor()`) attendent maintenant un
+`threading.Event` (`_model_ready`) avant de faire de l'inférence, au cas où
+`/api/cameras` arrive pendant le chargement du modèle — sinon ça aurait
+planté sur `_model = None`. Version add-on bump à 1.0.5 pour forcer
+Supervisor à reconstruire l'image.
+
+**Pas testé en conditions réelles** (pas de Supervisor accessible ici) —
+à valider par un redémarrage HA complet, en observant si l'intégration
+Crywatch redevient disponible sans intervention manuelle. Si le symptôme
+persiste malgré ce fix, ça voudrait dire que le vrai goulot est ailleurs
+(ex. `docker pull`/build de l'image au moment du restart, ou le DNS interne
+Supervisor pour `aff0293d-crywatch-cry-detector` qui met du temps à être
+résolu) — dans ce cas regarder les logs de l'add-on ET de l'intégration
+juste après un redémarrage pour voir lequel des deux traîne.
+
 ## Déploiement chez toi
 
 1. Vérifier le micro RTSP du C210 (`ffprobe` sur l'URL RTSP — piste audio présente ?).

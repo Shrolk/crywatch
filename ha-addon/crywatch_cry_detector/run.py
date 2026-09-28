@@ -44,17 +44,32 @@ RMS_GATE = float(OPTIONS.get("rms_gate_db", -60))
 STATE_TIMEOUT = float(OPTIONS.get("state_timeout", 60))
 LOG = bool(OPTIONS.get("log_scores", False))
 
-import tensorflow_hub as hub  # noqa: E402
-
-print("[yamnet] loading model ...", flush=True)
-_model = hub.load("https://tfhub.dev/google/yamnet/1")
-_cmap = _model.class_map_path().numpy().decode()
-CLASS_NAMES = [r["display_name"] for r in csv.DictReader(open(_cmap))]
-CRY_IDX = [CLASS_NAMES.index(n) for n in
-           ("Baby cry, infant cry", "Crying, sobbing", "Whimper")]
+_model = None
+CLASS_NAMES: list[str] = []
+CRY_IDX: list[int] = []
 _infer_lock = threading.Lock()   # YAMNet inference is serialized across cam threads
-print(f"[yamnet] ready. cry classes={CRY_IDX} prob>={CRY_PROB} sustain={SUSTAIN} "
-      f"cooldown={COOLDOWN}s sample={SAMPLE_SEC}s gate={RMS_GATE}dB", flush=True)
+_model_ready = threading.Event()
+
+
+def _load_model():
+    """Blocking YAMNet load — runs AFTER the HTTP server is already listening
+    (see __main__). Importing tensorflow_hub and loading YAMNet can take well
+    over a minute on modest hardware; if that ran before the server bound its
+    port, the crywatch HA integration's first poll at Home Assistant startup
+    hit a connection refused, failed its first coordinator refresh, and
+    needed a manual integration reload after every HA restart."""
+    global _model, CLASS_NAMES, CRY_IDX
+    import tensorflow_hub as hub
+    print("[yamnet] loading model ...", flush=True)
+    _model = hub.load("https://tfhub.dev/google/yamnet/1")
+    _cmap = _model.class_map_path().numpy().decode()
+    CLASS_NAMES = [r["display_name"] for r in csv.DictReader(open(_cmap))]
+    CRY_IDX = [CLASS_NAMES.index(n) for n in
+               ("Baby cry, infant cry", "Crying, sobbing", "Whimper")]
+    _model_ready.set()
+    print(f"[yamnet] ready. cry classes={CRY_IDX} prob>={CRY_PROB} sustain={SUSTAIN} "
+          f"cooldown={COOLDOWN}s sample={SAMPLE_SEC}s gate={RMS_GATE}dB", flush=True)
+
 
 _state = {}       # key (HA entity_id) -> {label, crying, score_pct, top, db, last_update}
 _state_lock = threading.Lock()
@@ -115,6 +130,7 @@ def monitor(key, label, url, stop_event):
     streak = 0
     last_alert = 0.0
     set_state(key, label=label, crying=False, score_pct=0, top="(starting)", db=None)
+    _model_ready.wait()  # a camera list can arrive before YAMNet finishes loading
     while not stop_event.is_set():
         wav = sample_audio(url)
         now = time.time()
@@ -210,6 +226,13 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    # Start serving /api/state immediately, in a non-daemon thread (keeps the
+    # process alive on its own) — so the port answers right away and the HA
+    # integration's first poll at Home Assistant startup doesn't race YAMNet's
+    # load time. The model then loads in the main thread; camera monitor
+    # threads wait on _model_ready before doing any inference.
+    server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    threading.Thread(target=server.serve_forever).start()
     print(f"[api] serving state on :{PORT} — waiting for the crywatch integration "
           f"to POST /api/cameras", flush=True)
-    ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+    _load_model()
