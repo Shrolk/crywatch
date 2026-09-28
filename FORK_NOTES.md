@@ -3,6 +3,28 @@
 Fork de [drjc1001/crywatch](https://github.com/drjc1001/crywatch) (upstream conservé
 dans l'historique git — `git log` montre les commits d'origine).
 
+## Releases GitHub pour HACS (2026-09-28)
+
+Avant ce commit, aucune release/tag n'existait sur le repo : HACS suit donc la
+branche `main` par défaut plutôt qu'une version taguée, ce qui n'est pas le
+fonctionnement standard (pas d'historique de versions propre, notification de
+mise à jour à chaque commit plutôt que par version).
+
+Convention adoptée, à partir de maintenant : **chaque changement dans
+`custom_components/crywatch/` doit bumper `manifest.json` → `version`, et
+chaque bump doit avoir un tag git + une GitHub Release au nom exact de la
+version** (ex. `1.3.3`, pas `v1.3.3` — HACS matche le tag contre
+`manifest.json` littéralement). Ne concerne QUE l'intégration HACS : l'add-on
+Supervisor (`ha-addon/crywatch_cry_detector/`) a son propre versionnement
+indépendant dans `config.yaml`, lu directement par Supervisor sur la branche —
+pas besoin de tag/release git pour lui, ça n'a pas de sens de mélanger les
+deux séries de versions dans les mêmes releases GitHub.
+
+Rattrapage fait ici : le fix « réveil d'écran » (`kiosk.py`, commit
+`7565a43`) avait été poussé sans bumper `manifest.json` — HACS ne l'aurait
+donc jamais proposé comme mise à jour. Version montée à `1.3.3` pour
+l'inclure, taguée et release faite dans la foulée.
+
 ## Ce qui a changé
 
 - **`cry-detector/yamnet_detect.py`** : ajout d'un client MQTT (paho-mqtt) publiant
