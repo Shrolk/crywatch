@@ -15,7 +15,7 @@
 alias: Simon - Afficher la caméra sur pleurs
 description: >-
   Allume l'écran de la tablette Kiosk Satellite et ouvre la vue caméra de Simon
-  (son activé) sur détection Crywatch ; referme et éteint 1 min après le retour au calme.
+  (son activé) avec une alarme sonore sur détection Crywatch ; referme et éteint 1 min après le retour au calme.
 mode: restart
 triggers:
   - trigger: state
@@ -46,6 +46,23 @@ actions:
           - action: button.press
             target:
               entity_id: button.chambre_simon_tablette_bebe_show_simon
+          # Alarme sonore : carillon + « Simon pleure » lu 3 fois par la synthèse vocale
+          # de HA. audio_only: true = pas de fenêtre par-dessus la vue caméra.
+          # Pour une vraie sirène à la place de la voix : message "" et url vers un
+          # MP3 accessible par la tablette (ex. /local/alarme.mp3 dans /config/www).
+          - action: esphome.ks_tablette_bebe_announce
+            data:
+              message: Simon pleure
+              url: ""
+              volume: 1
+              repeat: 2
+              repeat_pause: 2
+              chime: true
+              chime_file: ""
+              tts_engine: ""
+              tts_language: ""
+              tts_voice: ""
+              audio_only: true
       - conditions:
           - condition: trigger
             id: calme
