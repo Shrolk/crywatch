@@ -3,10 +3,6 @@
 DOMAIN = "crywatch"
 
 CONF_CAMERAS = "cameras"
-CONF_FULLY_KIOSK_DEVICE = "fully_kiosk_device"
-CONF_KIOSK_URL = "fully_kiosk_url"
-CONF_KIOSK_VOLUME = "fully_kiosk_volume"
-DEFAULT_KIOSK_VOLUME = 80
 
 # Supervisor-internal hostname for the companion add-on. For a repository
 # (non-official) add-on, Supervisor prefixes the config.yaml slug with a hash
@@ -25,3 +21,6 @@ SCAN_INTERVAL_SECONDS = 5
 # is missing from the add-on's state (add-on restarted, or camera entity not
 # loaded yet at HA startup). See CrywatchCoordinator.
 REPUSH_INTERVAL_SECONDS = 30
+# How long the "Simuler des pleurs" button holds a camera's cry binary_sensor
+# ON — long enough for an automation triggered on it to be seen working.
+SIMULATED_CRY_SECONDS = 30

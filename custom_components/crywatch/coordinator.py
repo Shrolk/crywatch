@@ -10,8 +10,9 @@ import aiohttp
 from homeassistant.components.camera import async_get_stream_source
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT
-from homeassistant.core import HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import CONF_CAMERAS, DOMAIN, REPUSH_INTERVAL_SECONDS, SCAN_INTERVAL_SECONDS
@@ -43,6 +44,34 @@ class CrywatchCoordinator(DataUpdateCoordinator[dict]):
         # cameras we already warned about, so a camera that stays unresolvable
         # doesn't log a warning every REPUSH_INTERVAL_SECONDS
         self._warned: set[str] = set()
+        # cameras whose cry state is forced ON by the "Simuler des pleurs"
+        # button, with the timer that ends the simulation
+        self._simulations: dict[str, CALLBACK_TYPE] = {}
+
+    def is_simulating(self, key: str) -> bool:
+        return key in self._simulations
+
+    @callback
+    def async_simulate_cry(self, key: str, seconds: float) -> None:
+        """Hold `key`'s cry state ON for `seconds`, as if the add-on had detected
+        a cry — lets automations triggered on the binary_sensor be tested without
+        a real cry. Pressing again restarts the countdown."""
+        if cancel := self._simulations.pop(key, None):
+            cancel()
+
+        @callback
+        def _end(_now) -> None:
+            self._simulations.pop(key, None)
+            self.async_update_listeners()
+
+        self._simulations[key] = async_call_later(self.hass, seconds, _end)
+        self.async_update_listeners()
+
+    @callback
+    def async_cancel_simulations(self) -> None:
+        for cancel in self._simulations.values():
+            cancel()
+        self._simulations.clear()
 
     async def async_push_cameras(self) -> None:
         """Resolve each configured camera entity's RTSP source and hand the list to the add-on."""

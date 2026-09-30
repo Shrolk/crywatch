@@ -25,7 +25,8 @@ async def async_setup_entry(
 
 
 class CrywatchCryBinarySensor(CoordinatorEntity[CrywatchCoordinator], BinarySensorEntity):
-    """ON while the add-on considers a real cry to be in progress."""
+    """ON while the add-on considers a real cry to be in progress, or while the
+    "Simuler des pleurs" button's simulation runs."""
 
     _attr_device_class = BinarySensorDeviceClass.SOUND
     _attr_has_entity_name = True
@@ -50,7 +51,14 @@ class CrywatchCryBinarySensor(CoordinatorEntity[CrywatchCoordinator], BinarySens
     @property
     def is_on(self) -> bool | None:
         cam = self.coordinator.data.get(self._key)
-        return cam.get("crying") if cam else None
+        if cam is None:
+            return None
+        return bool(cam.get("crying")) or self.coordinator.is_simulating(self._key)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, bool]:
+        # lets an automation tell a test apart from a real cry, if it cares
+        return {"simulation": self.coordinator.is_simulating(self._key)}
 
     @property
     def available(self) -> bool:

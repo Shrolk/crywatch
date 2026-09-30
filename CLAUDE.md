@@ -18,11 +18,11 @@ conditions réelles**. Considère tout comme "à valider", pas "qui marche".
 3. Quand un pleur est détecté : capteurs natifs dans Home Assistant (plus de
    MQTT — voir pivot du 2026-09-20 ci-dessous) : `binary_sensor` « Pleurs
    détectés » + `sensor` confiance %, un couple par caméra.
-4. Une automation HA qui, sur ce binary_sensor passant à `on`, réveille un
-   téléphone équipé de **Fully Kiosk Browser PLUS**, joue un bip d'alerte,
-   affiche le flux caméra (son activé) pendant 1 minute, puis revient au
-   dashboard précédent. (Cette automation HA a été conçue dans une conversation
-   précédente — pas dans ce repo. Voir section "Automation HA" plus bas.)
+4. Une automation HA qui, sur ce binary_sensor passant à `on`, réveille une
+   tablette **Kiosk Satellite** (a remplacé Fully Kiosk le 2026-09-30) et y
+   affiche la vue caméra de Simon avec le son. L'intégration ne pilote plus
+   d'écran elle-même : voir `examples/automation-kiosk-satellite.yaml` et
+   le bouton « Simuler des pleurs » pour tester.
 
 ## État du fork (ce qui a changé vs upstream)
 
