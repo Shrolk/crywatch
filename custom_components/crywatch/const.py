@@ -21,3 +21,7 @@ DEFAULT_HOST = "aff0293d-crywatch-cry-detector"
 DEFAULT_PORT = 8091
 
 SCAN_INTERVAL_SECONDS = 5
+# Min delay between two re-pushes of the camera list, when a configured camera
+# is missing from the add-on's state (add-on restarted, or camera entity not
+# loaded yet at HA startup). See CrywatchCoordinator.
+REPUSH_INTERVAL_SECONDS = 30
