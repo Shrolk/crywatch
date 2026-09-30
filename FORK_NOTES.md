@@ -25,6 +25,14 @@ Rattrapage fait ici : le fix « réveil d'écran » (`kiosk.py`, commit
 donc jamais proposé comme mise à jour. Version montée à `1.3.3` pour
 l'inclure, taguée et release faite dans la foulée.
 
+**Automatisé depuis le 2026-09-30** (`.github/workflows/release.yml`) : il
+suffit maintenant de bumper `version` dans `manifest.json` et de merger sur
+`main`. Le workflow valide d'abord (hassfest + action HACS, cf.
+`validate.yml`), puis crée le tag et la release avec notes générées. Il ne
+fait rien si le tag existe déjà, et échoue si la version est inférieure au
+dernier tag. Relançable à la main (onglet Actions → Release → Run workflow)
+si un run a échoué. Les tags ne sont plus à pousser depuis un poste.
+
 ## Ce qui a changé
 
 - **`cry-detector/yamnet_detect.py`** : ajout d'un client MQTT (paho-mqtt) publiant

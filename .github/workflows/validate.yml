@@ -1,0 +1,30 @@
+# Valide l'intégration HACS (custom_components/crywatch) avec les deux outils
+# officiels. Tourne sur chaque PR / push, et est réutilisée par release.yml
+# pour qu'aucune release ne parte sur un code qui ne passe pas.
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  hassfest:
+    name: hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    name: HACS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hacs/action@main
+        with:
+          category: integration
