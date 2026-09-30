@@ -1,0 +1,73 @@
+# Crée le tag git + la GitHub Release quand la version de l'intégration change
+# sur main. Convention (voir FORK_NOTES.md) : tag = version exacte de
+# manifest.json, sans préfixe "v", sinon HACS ne fait pas le lien.
+#
+# Idempotent : si le tag existe déjà, ne fait rien. Donc un push sur main qui
+# touche manifest.json sans changer la version (ou un relancement manuel) est
+# sans effet.
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - custom_components/crywatch/manifest.json
+      - .github/workflows/release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    uses: ./.github/workflows/validate.yml
+
+  release:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tags nécessaires pour comparer les versions
+
+      - name: Lire la version et décider
+        id: version
+        run: |
+          version=$(jq -r .version custom_components/crywatch/manifest.json)
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version '$version' invalide dans manifest.json (attendu X.Y.Z, sans 'v')"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          if git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
+            echo "Tag $version déjà présent, rien à publier."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Refuse une version inférieure au dernier tag : protège contre un
+          # retour arrière accidentel (merge d'une vieille branche, typo).
+          latest=$(git tag --list '[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n1)
+          if [[ -n "$latest" ]] && [[ "$(printf '%s\n%s\n' "$latest" "$version" | sort -V | tail -n1)" != "$version" ]]; then
+            echo "::error::Version $version inférieure au dernier tag $latest"
+            exit 1
+          fi
+          echo "release=true" >> "$GITHUB_OUTPUT"
+
+      - name: Créer le tag et la release
+        if: steps.version.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "$VERSION" \
+            --target "$GITHUB_SHA" \
+            --title "$VERSION" \
+            --generate-notes
