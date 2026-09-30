@@ -20,7 +20,7 @@ async def async_setup_entry(
 ) -> None:
     coordinator: CrywatchCoordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(
-        CrywatchCryBinarySensor(coordinator, entry, key) for key in coordinator.data
+        CrywatchCryBinarySensor(coordinator, entry, key) for key in coordinator.camera_keys
     )
 
 
@@ -35,7 +35,11 @@ class CrywatchCryBinarySensor(CoordinatorEntity[CrywatchCoordinator], BinarySens
         super().__init__(coordinator)
         self._key = key
         self._attr_unique_id = f"{entry.entry_id}_{key}_cry"
-        label = (coordinator.data.get(key) or {}).get("label", key)
+        # Created from the configured cameras, not from the add-on's state, so
+        # the entities exist (unavailable) even if the add-on isn't watching
+        # the camera yet, and come back on their own once it is.
+        state = coordinator.hass.states.get(key)
+        label = (coordinator.data.get(key) or {}).get("label") or (state.name if state else key)
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry.entry_id}_{key}")},
             name=label,

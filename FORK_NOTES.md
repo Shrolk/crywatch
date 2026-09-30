@@ -140,6 +140,13 @@ l'API HA standard pour ça, censée marcher quel que soit le type d'intégration
 caméra sous-jacente (Generic/ONVIF/Tapo). Elle pousse ensuite la liste
 (`{key: entity_id, name, rtsp_url}`) à l'add-on via `POST /api/cameras` — à
 la création de l'intégration, et à chaque `Recharger`/changement d'options.
+Depuis 1.3.5, le coordinator la repousse aussi (au plus toutes les 30 s) dès
+qu'une caméra configurée manque dans `/api/state` : l'add-on ne garde sa
+liste qu'en mémoire, et au démarrage de HA l'entité caméra (Frigate chez
+Pierre) peut ne pas exister encore. Avant 1.3.5, l'un ou l'autre laissait les
+capteurs « Indisponible » jusqu'à un rechargement manuel (vu le 2026-09-30).
+Les entités sont créées depuis les caméras configurées, plus depuis l'état de
+l'add-on, pour qu'elles reviennent seules.
 L'add-on démarre maintenant **sans caméra du tout** et applique la liste
 reçue à chaud (démarre/arrête les threads concernés, sans redémarrer). Donc
 `ha-addon/.../config.yaml` n'a plus d'option `cameras`.
