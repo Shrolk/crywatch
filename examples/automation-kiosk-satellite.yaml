@@ -59,7 +59,7 @@ actions:
               repeat_pause: 2
               chime: true
               chime_file: ""
-              tts_engine: ""
+              tts_engine: tts.piper  # sinon « premier disponible » = Google en anglais
               tts_language: ""
               tts_voice: ""
               audio_only: true
