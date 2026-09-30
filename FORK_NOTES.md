@@ -257,7 +257,33 @@ Attention notée mais pas vérifiable à distance : le navigateur Fully
 Kiosk de la tablette doit déjà être connecté/authentifié à HA pour que
 `load_url` affiche la caméra directement plutôt qu'un écran de connexion.
 
-## Alerte Fully Kiosk intégrée (2026-09-24)
+## Fully Kiosk retiré, bouton « Simuler des pleurs » (2026-09-30, 1.4.0)
+
+Pierre est passé de Fully Kiosk à **Kiosk Satellite** (app Android qui se
+présente à HA comme un appareil ESPHome : entités `light` écran, boutons
+`Show <vue>` / `Close camera view`, volume…). Plutôt que d'intégrer cette
+nouvelle app dans Crywatch comme on l'avait fait pour Fully Kiosk, tout le
+pilotage d'écran est sorti de l'intégration : `kiosk.py` supprimé, les
+trois options Fully Kiosk retirées du config/options flow. C'est une
+automation HA qui réagit au `binary_sensor` (exemple :
+`examples/automation-kiosk-satellite.yaml`). Raison : Kiosk Satellite
+expose déjà des entités propres, et coder son support lierait Crywatch aux
+identifiants d'une app tierce qui peut changer.
+
+Le bouton de test devient **« Simuler des pleurs »**, un par caméra (même
+appareil que ses capteurs) : il force le `binary_sensor` à ON pendant
+`SIMULATED_CRY_SECONDS` (30 s) via le coordinator, puis le rend à l'état
+réel. Attribut `simulation` sur le binary_sensor pour distinguer un test.
+
+Effets sur une installation existante : les anciennes clés `fully_kiosk_*`
+restent dans les options de l'entrée jusqu'au prochain enregistrement des
+options (ignorées), et l'ancien bouton
+`button.crywatch_tester_l_alerte_fully_kiosk` devient orphelin (à
+supprimer à la main, avec l'appareil « Crywatch » resté vide).
+
+Les sections Fully Kiosk ci-dessous sont gardées pour l'historique.
+
+## Alerte Fully Kiosk intégrée (2026-09-24) — retiré en 1.4.0, voir plus haut
 
 Sur demande de Pierre : au lieu d'une automation HA séparée (qu'il n'avait
 en fait jamais créée — la mention dans une conversation précédente était

@@ -14,7 +14,6 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 from .coordinator import CrywatchCoordinator
-from .kiosk import async_setup_kiosk_alert
 
 PLATFORMS: list[str] = ["binary_sensor", "sensor", "button"]
 
@@ -24,7 +23,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordinator.async_push_cameras()
     await coordinator.async_config_entry_first_refresh()
 
-    coordinator.kiosk_manager = async_setup_kiosk_alert(hass, entry, coordinator)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
@@ -39,5 +37,5 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
-        hass.data[DOMAIN].pop(entry.entry_id)
+        hass.data[DOMAIN].pop(entry.entry_id).async_cancel_simulations()
     return unloaded

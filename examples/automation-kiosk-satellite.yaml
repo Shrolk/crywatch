@@ -1,0 +1,59 @@
+# Simon : afficher la caméra sur Kiosk Satellite quand Crywatch détecte des pleurs.
+#
+# Prérequis dans l'app Kiosk Satellite (sinon les entités ci-dessous n'existent pas) :
+#   1. Réglages > ESPHome > activer « Expose kiosk entities ».
+#   2. Réglages > Camera Streams > « Import cameras from Home Assistant », puis créer
+#      une vue « Simon » contenant UNIQUEMENT camera.simon.
+#   3. Réglages > Camera Streams > Playback > activer « Play sound for a single camera ».
+#
+# entity_id vérifiés le 2026-09-30 sur l'appareil « Tablette Bebe » (préfixe
+# chambre_simon_tablette_bebe_). « Volume » est à 67 %, « Media volume » déjà à 100 % :
+# on règle « Volume », le plus bas des deux.
+#
+# Collage : Paramètres > Automatisations > Créer > ⋮ > Modifier en YAML.
+
+alias: Simon - Afficher la caméra sur pleurs
+description: >-
+  Allume l'écran de la tablette Kiosk Satellite et ouvre la vue caméra de Simon
+  (son activé) sur détection Crywatch ; referme et éteint 1 min après le retour au calme.
+mode: restart
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.simon_pleurs_detectes
+    to: "on"
+    id: pleurs
+  # Crywatch maintient déjà « on » 60 s après le dernier pleur ; on attend 1 min de plus
+  # à « off » pour ne pas couper l'image entre deux épisodes rapprochés.
+  - trigger: state
+    entity_id: binary_sensor.simon_pleurs_detectes
+    to: "off"
+    for: "00:01:00"
+    id: calme
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: pleurs
+        sequence:
+          - action: light.turn_on
+            target:
+              entity_id: light.chambre_simon_tablette_bebe_screen
+          - action: number.set_value
+            target:
+              entity_id: number.chambre_simon_tablette_bebe_volume
+            data:
+              value: 80
+          - action: button.press
+            target:
+              entity_id: button.chambre_simon_tablette_bebe_show_simon
+      - conditions:
+          - condition: trigger
+            id: calme
+        sequence:
+          - action: button.press
+            target:
+              entity_id: button.chambre_simon_tablette_bebe_close_camera_view
+          # Retire cette action si tu préfères laisser l'économiseur d'écran de l'app gérer.
+          - action: light.turn_off
+            target:
+              entity_id: light.chambre_simon_tablette_bebe_screen

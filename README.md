@@ -68,26 +68,21 @@ Deux entités apparaissent par caméra choisie, groupées en un appareil HA :
 `sensor.<caméra>_confiance_pleurs`. Pour ajouter/retirer une caméra plus
 tard : *Paramètres → Appareils et services → Crywatch → ⋮ → Configurer*.
 
-### 4. Réveil automatique d'un appareil Fully Kiosk (optionnel)
+### 4. Réagir à un pleur (automation HA)
 
-Dans la même page de configuration de l'intégration (*⋮ → Configurer*),
-choisis un appareil **Fully Kiosk Browser PLUS** déjà connecté à HA
-(*Paramètres → Appareils et services → Fully Kiosk Browser* s'il n'est pas
-encore ajouté), le **chemin** d'un tableau de bord/vue à afficher (ex.
-`dashboard-test/simon` — pas besoin de l'URL complète, elle est reconstruite
-automatiquement à partir de l'URL de ton HA), et un volume d'alerte. Quand
-un pleur est détecté, l'intégration réveille l'appareil au premier plan,
-charge cette vue et monte le son — puis revient en arrière automatiquement
-quand l'alerte se termine. Laisse le champ appareil vide
-pour désactiver cette fonctionnalité.
+L'intégration ne pilote aucun écran elle-même : utilise
+`binary_sensor.<caméra>_pleurs_detectes` passant à `on` comme déclencheur
+d'une automation HA (réveiller une tablette, afficher la caméra,
+notifier…). Exemple avec une tablette Kiosk Satellite :
+[`examples/automation-kiosk-satellite.yaml`](examples/automation-kiosk-satellite.yaml).
 
-Une fois un appareil configuré, un bouton **« Tester l'alerte Fully
-Kiosk »** apparaît (appareil HA *Crywatch*) : il rejoue la même séquence
-sans attendre un vrai pleur, pratique pour vérifier que ça réveille bien
-l'écran avant de faire confiance au déclenchement automatique.
-
-**Sinon**, utilise `binary_sensor.<caméra>_pleurs_detectes` passant à `on`
-comme trigger dans ta propre automation HA.
+Chaque caméra a aussi un bouton **« Simuler des pleurs »** (même appareil
+HA que ses capteurs) : il force le `binary_sensor` à `on` pendant 30 s,
+comme une vraie détection, puis le rend à l'état réel de l'add-on. Ton
+automation se déclenche donc pour de vrai, sans attendre un pleur.
+L'attribut `simulation: true` permet de distinguer un test si besoin. Le
+bouton n'a d'effet que si l'add-on surveille bien la caméra (capteur
+disponible).
 
 ## Réglages de détection
 
