@@ -377,6 +377,33 @@ Supervisor pour `aff0293d-crywatch-cry-detector` qui met du temps à être
 résolu) — dans ce cas regarder les logs de l'add-on ET de l'intégration
 juste après un redémarrage pour voir lequel des deux traîne.
 
+## Icône manquante sur l'intégration (2026-09-30)
+
+Symptôme rapporté par Pierre : l'icône Crywatch apparaît sur l'add-on
+(Paramètres → Add-ons) mais pas sur l'intégration (Paramètres → Appareils
+et services). Normal, pas un bug : l'add-on lit `icon.png`/`logo.png`
+directement dans son propre dossier du repo, mais une intégration HACS ne
+fonctionne pas pareil — jusqu'à HA 2026.3, l'icône d'une intégration tierce
+devait être soumise au dépôt communautaire `home-assistant/brands` (PR
+externe, revue par les mainteneurs HA, hors de ce repo).
+
+Depuis **HA 2026.3.0**, une intégration peut désormais fournir sa propre
+icône directement dans son dossier (`custom_components/crywatch/brand/`),
+sans dépendre de ce dépôt externe — c'est ce qui a été fait ici :
+`icon.png`/`icon@2x.png`/`logo.png`/`logo@2x.png` (256×256 / 512×512,
+RGBA), régénérés depuis `ha-addon/crywatch_cry_detector/logo.svg` (déjà
+vectoriel, donc plus net que les PNG existants de l'add-on qui n'étaient
+que 128×256px).
+
+**Suppose que le HA de Pierre est en 2026.3+** — non vérifié. Si sa version
+est antérieure, ce dossier `brand/` ne fait simplement rien (pas de
+régression, juste pas d'icône, comme avant), et il faudrait alors repasser
+par une PR sur `home-assistant/brands` (voie legacy) ou juste mettre HA à
+jour. Nécessite un redémarrage HA (l'intégration est chargée dès le
+démarrage) **et probablement un rafraîchissement forcé du navigateur**
+(cache du frontend) pour voir l'icône apparaître — sinon `Ctrl+Maj+R` ou
+équivalent avant de conclure que ça n'a pas marché.
+
 ## Déploiement chez toi
 
 1. Vérifier le micro RTSP du C210 (`ffprobe` sur l'URL RTSP — piste audio présente ?).

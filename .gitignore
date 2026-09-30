@@ -64,3 +64,4 @@ vision/**/control.json
 !docs/*.png
 !ha-addon/crywatch_cry_detector/icon.png
 !ha-addon/crywatch_cry_detector/logo.png
+!custom_components/crywatch/brand/*.png
